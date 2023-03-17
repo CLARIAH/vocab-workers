@@ -3,7 +3,7 @@ import logging
 import requests
 
 from vocab.util import session
-from vocab.util import get_record
+from vocab.cmdi import get_record, write_summary
 
 log = logging.getLogger(__name__)
 url = os.environ.get('SUMMARIZER_URL', 'https://uridid.vocabs.dev.clariah.nl/summarizer')
@@ -21,11 +21,18 @@ def lov(id):
 def summarizer(id):
     record = get_record(id)
     if record:
-        response = session.get(url, params={'url': record['endpoint']})
-        if response.status_code == requests.codes.ok:
-            data = response.json()
-            log.info(f'Work with summarizer results for {id}: {data}')
+        location = next(filter(lambda loc: loc['type'] == 'endpoint', record['locations']), None)
+        if location:
+            response = session.get(url, params={'url': location['location']})
+            if response.status_code == requests.codes.ok:
+                data = response.json()
+                log.info(f'Work with summarizer results for {id}: {data}')
+
+                write_summary(id, data)
+                log.info(f'Wrote summarizer results for {id}: {data}')
+            else:
+                log.info(f'No summarizer results for {id}!')
         else:
-            log.info(f'No summarizer results for {id}!')
+            log.info(f'No endpoint found for {id}!')
     else:
         log.info(f'No record found for {id}!')
