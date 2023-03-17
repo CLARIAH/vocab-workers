@@ -1,8 +1,13 @@
 import os
+import requests
 import elementpath
 import unicodedata
 
 from lxml import etree
+from requests.adapters import HTTPAdapter, Retry
+
+session = requests.Session()
+session.mount('https://', HTTPAdapter(max_retries=Retry(total=10, backoff_factor=1)))
 
 
 def get_record(rec):
