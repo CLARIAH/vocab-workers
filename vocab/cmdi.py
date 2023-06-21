@@ -30,21 +30,22 @@ def grab_first(path, root):
     return content[0] if content else None
 
 
+def grab_value(path, root, func=None):
+    content = elementpath.select(root, path, ns)
+    if content and type(content[0]) == str:
+        content = unicodedata.normalize("NFKD", content[0]).strip()
+    elif content and content[0].text is not None:
+        content = unicodedata.normalize("NFKD", content[0].text).strip()
+    else:
+        content = None
+
+    if content and func:
+        content = func(content)
+
+    return content
+
+
 def get_record(id):
-    def grab_value(path, root, func=None):
-        content = elementpath.select(root, path, ns)
-        if content and type(content[0]) == str:
-            content = unicodedata.normalize("NFKD", content[0]).strip()
-        elif content and content[0].text is not None:
-            content = unicodedata.normalize("NFKD", content[0].text).strip()
-        else:
-            content = None
-
-        if content and func:
-            content = func(content)
-
-        return content
-
     def create_summary_for(elem, is_obj=False):
         summary = {
             "count": grab_value("./cmd:count", elem, int),
@@ -145,5 +146,29 @@ def write_summary(id, data):
         if prefix in data['stats']:
             count_elem = etree.SubElement(namespace, f"{ns_prefix}count", nsmap=ns)
             count_elem.text = str(data['stats'][prefix])
+
+    write_root(file, root)
+
+
+def write_location(id, uri, type, recipe):
+    file = get_file_for_id(id)
+    root = read_root(file)
+    vocab = grab_first(voc_root, root)
+
+    for location in elementpath.select(root, "./cmd:Location", ns):
+        if grab_value("./cmd:uri", location) == uri:
+            vocab.remove(location)
+
+    location = etree.SubElement(vocab, f"{ns_prefix}Location", nsmap=ns)
+
+    uri_elem = etree.SubElement(location, f"{ns_prefix}uri", nsmap=ns)
+    uri_elem.text = uri
+
+    type_elem = etree.SubElement(location, f"{ns_prefix}type", nsmap=ns)
+    type_elem.text = type
+
+    if recipe:
+        recipe_elem = etree.SubElement(location, f"{ns_prefix}recipe", nsmap=ns)
+        recipe_elem.text = recipe
 
     write_root(file, root)

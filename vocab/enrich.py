@@ -3,7 +3,7 @@ import logging
 import requests
 
 from vocab.util import session
-from vocab.cmdi import get_record, write_summary
+from vocab.cmdi import get_record, write_summary, write_location
 
 log = logging.getLogger(__name__)
 url = os.environ.get('SUMMARIZER_URL', 'https://uridid.vocabs.dev.clariah.nl/summarizer')
@@ -36,3 +36,17 @@ def summarizer(id):
             log.info(f'No endpoint found for {id}!')
     else:
         log.info(f'No record found for {id}!')
+
+
+def skosmos(id):
+    record = get_record(id)
+    if record and record['summary'] and \
+            next(filter(lambda stat: stat['prefix'] == 'skos', record['summary']['stats']), None):
+        log.info(f'SKOS found for {id}')
+
+        write_location(id, f'https://skosmos.vocabs.dev.clariah.nl/{id}', 'homepage', 'skosmos')
+        write_location(id, f'', 'endpoint', 'sparql')
+
+        log.info(f'Wrote SKOS locations for {id}:')
+    else:
+        log.info(f'No SKOS found for {id}!')
