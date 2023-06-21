@@ -1,9 +1,14 @@
 import os
+import logging
+import operator
+
 import elementpath
 import unicodedata
 
 from lxml import etree
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 
 ns = {"cmd": "http://www.clarin.eu/cmd/"}
 ns_prefix = '{http://www.clarin.eu/cmd/}'
@@ -11,7 +16,7 @@ voc_root = './cmd:Components/cmd:Vocabulary'
 
 
 def get_file_for_id(id):
-    return os.environ.get('RECORDS_PATH', '../data/records/') + id
+    return os.environ.get('RECORDS_PATH', '../data/records/') + id + '.cmdi'
 
 
 def read_root(file):
@@ -20,9 +25,9 @@ def read_root(file):
 
 
 def write_root(file, root):
-    fh = open(file, 'wb')
-    fh.write(etree.tostring(root, pretty_print=True))
-    fh.close()
+    tree = etree.ElementTree(root)
+    etree.indent(tree, space='    ', level=0)
+    tree.write(file, encoding='utf-8')
 
 
 def grab_first(path, root):
@@ -67,46 +72,65 @@ def get_record(id):
 
         return summary
 
+    def create_location_for(elem):
+        return {
+            "location": grab_value("./cmd:uri", elem),
+            "type": grab_value("./cmd:type", elem),
+            "recipe": grab_value("./cmd:recipe", elem),
+        }
+
     file = get_file_for_id(id)
     root = read_root(file)
 
-    return {
-        "id": id,
-        "title": grab_value(
-            f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],base-uri(/cmd:CMD)[normalize-space(.)!=''])[1]",
-            root),
-        "description": grab_value(f"{voc_root}/cmd:Description/cmd:description[@xml:lang='en']", root),
-        "license": grab_value(f"{voc_root}/cmd:License/cmd:url", root) or 'http://rightsstatements.org/vocab/UND/1.0/',
-        "versioningPolicy": None,
-        "sustainabilityPolicy": None,
-        "created": datetime.utcfromtimestamp(os.path.getctime(file)).isoformat(),
-        "modified": datetime.utcfromtimestamp(os.path.getmtime(file)).isoformat(),
-        "locations": [{
-            "location": grab_value("./cmd:uri", elem),
-            "type": grab_value("./cmd:type", elem),
-            "recipe": None
-        } for elem in elementpath.select(root, f"{voc_root}/cmd:Location", ns)],
-        "reviews": [],
-        "usage": {
-            "count": 0,
-            "outOf": 0
-        },
-        "recommendations": [{
-            "publisher": grab_value("./cmd:name", elem),
-            "rating": None
-        } for elem in elementpath.select(root, f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher", ns)],
-        "summary": {
-            "namespace": {
-                "uri": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:URI", root),
-                "prefix": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:prefix", root)
+    try:
+        record = {
+            "id": id,
+            "title": grab_value(
+                f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],base-uri(/cmd:CMD)[normalize-space(.)!=''])[1]",
+                root),
+            "description": grab_value(f"{voc_root}/cmd:Description/cmd:description[@xml:lang='en']", root),
+            "license": grab_value(f"{voc_root}/cmd:License/cmd:url",
+                                  root) or 'http://rightsstatements.org/vocab/UND/1.0/',
+            "versioningPolicy": None,
+            "sustainabilityPolicy": None,
+            "created": datetime.utcfromtimestamp(os.path.getctime(file)).isoformat(),
+            "modified": datetime.utcfromtimestamp(os.path.getmtime(file)).isoformat(),
+            "locations": [create_location_for(elem) for elem in
+                          elementpath.select(root, f"{voc_root}/cmd:Location", ns)],
+            "reviews": [],
+            "usage": {
+                "count": 0,
+                "outOf": 0
             },
-            "stats": create_summary_for(grab_first(f"{voc_root}/cmd:Summary", root)),
-            "subjects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects", root)),
-            "predicates": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
-            "objects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root),
-                                          is_obj=True),
-        } if grab_first(f"{voc_root}/cmd:Summary", root) else None
-    }
+            "recommendations": [{
+                "publisher": grab_value("./cmd:name", elem),
+                "rating": None
+            } for elem in elementpath.select(root, f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher", ns)],
+            "summary": {
+                "namespace": {
+                    "uri": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:URI", root),
+                    "prefix": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:prefix", root)
+                },
+                "stats": create_summary_for(grab_first(f"{voc_root}/cmd:Summary", root)),
+                "subjects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects", root)),
+                "predicates": create_summary_for(
+                    grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
+                "objects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root),
+                                              is_obj=True),
+            } if grab_first(f"{voc_root}/cmd:Summary", root) is not None else None,
+            "versions": sorted([{
+                "version": grab_value("./cmd:version", elem),
+                "validFrom": grab_value("./cmd:validFrom", elem),
+                "locations": [create_location_for(loc_elem) for loc_elem in
+                              elementpath.select(elem, "./cmd:Location", ns)],
+            } for elem in elementpath.select(root, f"{voc_root}/cmd:Version", ns)],
+                key=operator.itemgetter('validFrom', 'version'), reverse=True)
+        }
+    except Exception as e:
+        log.error(f'Cannot parse record with id {id}')
+        raise e
+
+    return record
 
 
 def write_summary(id, data):
@@ -115,7 +139,7 @@ def write_summary(id, data):
     vocab = grab_first(voc_root, root)
 
     summary = grab_first("./cmd:Summary", vocab)
-    if summary:
+    if summary is not None:
         vocab.remove(summary)
 
     summary = etree.SubElement(vocab, f"{ns_prefix}Summary", nsmap=ns)

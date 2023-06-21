@@ -19,21 +19,40 @@ def lov(id):
 
 
 def summarizer(id):
+    def summarizer_for_location(location):
+        response = session.get(url, params={'url': location['location']})
+        if response.status_code == requests.codes.ok:
+            data = response.json()
+            log.info(f'Work with summarizer results for {id}: {data}')
+
+            write_summary(id, data)
+            log.info(f'Wrote summarizer results for {id}: {data}')
+
+            return True
+        else:
+            return False
+
     record = get_record(id)
     if record:
-        location = next(filter(lambda loc: loc['type'] == 'endpoint', record['locations']), None)
-        if location:
-            response = session.get(url, params={'url': location['location']})
-            if response.status_code == requests.codes.ok:
-                data = response.json()
-                log.info(f'Work with summarizer results for {id}: {data}')
+        if 'versions' in record and record['versions'] and 'locations' in record['versions'][0]:
+            wrote_summary = False
+            locations = record['versions'][0]['locations']
 
-                write_summary(id, data)
-                log.info(f'Wrote summarizer results for {id}: {data}')
-            else:
+            location = next(filter(lambda l: l['type'] == 'endpoint' and l['recipe'] is None, locations), None)
+            if location:
+                wrote_summary = summarizer_for_location(location)
+
+            if not wrote_summary:
+                location = next(filter(lambda l: l['type'] == 'endpoint' and l['recipe'] == 'cache', locations), None)
+                if location:
+                    wrote_summary = summarizer_for_location(location)
+
+            if not location:
+                log.info(f'No endpoint found for {id}!')
+            elif not wrote_summary:
                 log.info(f'No summarizer results for {id}!')
         else:
-            log.info(f'No endpoint found for {id}!')
+            log.info(f'No version found for {id}!')
     else:
         log.info(f'No record found for {id}!')
 
