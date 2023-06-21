@@ -6,7 +6,7 @@ from vocab.util import session
 from vocab.cmdi import get_record, write_summary, write_location
 
 log = logging.getLogger(__name__)
-url = os.environ.get('SUMMARIZER_URL', 'https://uridid.vocabs.dev.clariah.nl/summarizer')
+url = os.environ.get('SUMMARIZER_URL', 'https://api.zandbak.dans.knaw.nl/summarizer')
 
 
 def lov(id):

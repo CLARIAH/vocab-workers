@@ -66,8 +66,8 @@ def get_record(id):
             literals_root = grab_first("./cmd:Literals", elem)
 
             summary.update(
-                classes=create_summary_for(classes_root) if classes_root else None,
-                literals=create_summary_for(literals_root) if literals_root else None
+                classes=create_summary_for(classes_root) if classes_root is not None else None,
+                literals=create_summary_for(literals_root) if literals_root is not None else None
             )
 
         return summary
@@ -134,6 +134,23 @@ def get_record(id):
 
 
 def write_summary(id, data):
+    def write_namespaces(root, data, get_count, check_prefix=lambda prefix: True):
+        namespaces = etree.SubElement(root, f"{ns_prefix}Namespaces", nsmap=ns)
+        for uri, prefix in data['prefixes'].items():
+            if check_prefix(prefix):
+                namespace = etree.SubElement(namespaces, f"{ns_prefix}Namespace", nsmap=ns)
+
+                uri_elem = etree.SubElement(namespace, f"{ns_prefix}URI", nsmap=ns)
+                uri_elem.text = uri
+
+                prefix_elem = etree.SubElement(namespace, f"{ns_prefix}prefix", nsmap=ns)
+                prefix_elem.text = prefix
+
+                count = get_count(prefix)
+                if count > 0:
+                    count_elem = etree.SubElement(namespace, f"{ns_prefix}count", nsmap=ns)
+                    count_elem.text = str(count)
+
     file = get_file_for_id(id)
     root = read_root(file)
     vocab = grab_first(voc_root, root)
@@ -147,29 +164,37 @@ def write_summary(id, data):
 
     subjects = etree.SubElement(statements, f"{ns_prefix}Subjects", nsmap=ns)
     subjects_count = etree.SubElement(subjects, f"{ns_prefix}count", nsmap=ns)
-    subjects_count.text = str(data['statements']['unique subjects'])
+    subjects_count.text = str(data['statements']['subjects'])
 
     predicates = etree.SubElement(statements, f"{ns_prefix}Predicates", nsmap=ns)
     predicates_count = etree.SubElement(predicates, f"{ns_prefix}count", nsmap=ns)
-    predicates_count.text = str(data['statements']['unique predicates'])
+    predicates_count.text = str(data['statements']['predicates'])
 
     objects = etree.SubElement(statements, f"{ns_prefix}Objects", nsmap=ns)
     objects_count = etree.SubElement(objects, f"{ns_prefix}count", nsmap=ns)
-    objects_count.text = str(data['statements']['unique objects'])
+    objects_count.text = str(data['statements']['objects'])
 
-    namespaces = etree.SubElement(summary, f"{ns_prefix}Namespaces", nsmap=ns)
-    for uri, prefix in data['prefixes'].items():
-        namespace = etree.SubElement(namespaces, f"{ns_prefix}Namespace", nsmap=ns)
+    object_classes = etree.SubElement(objects, f"{ns_prefix}Classes", nsmap=ns)
+    object_classes_count = etree.SubElement(object_classes, f"{ns_prefix}count", nsmap=ns)
+    object_classes_count.text = str(0)  # TODO
 
-        uri_elem = etree.SubElement(namespace, f"{ns_prefix}URI", nsmap=ns)
-        uri_elem.text = uri
+    object_literals = etree.SubElement(objects, f"{ns_prefix}Literals", nsmap=ns)
+    object_literals_count = etree.SubElement(object_literals, f"{ns_prefix}count", nsmap=ns)
+    object_literals_count.text = str(0)  # TODO
 
-        prefix_elem = etree.SubElement(namespace, f"{ns_prefix}prefix", nsmap=ns)
-        prefix_elem.text = prefix
-
-        if prefix in data['stats']:
-            count_elem = etree.SubElement(namespace, f"{ns_prefix}count", nsmap=ns)
-            count_elem.text = str(data['stats'][prefix])
+    write_namespaces(summary, data, get_count=lambda prefix: data['stats'].get(prefix, 0))
+    write_namespaces(subjects, data,
+                     get_count=lambda prefix: data['statements']['statements']['subjects'].get(prefix, 0),
+                     check_prefix=lambda prefix: prefix in data['statements']['statements']['subjects'])
+    write_namespaces(predicates, data,
+                     get_count=lambda prefix: data['statements']['statements']['predicates'].get(prefix, 0),
+                     check_prefix=lambda prefix: prefix in data['statements']['statements']['predicates'])
+    write_namespaces(object_classes, data,
+                     get_count=lambda prefix: data['statements']['statements']['objects'].get(prefix, 0),
+                     check_prefix=lambda prefix: prefix in data['statements']['statements']['objects'])
+    # TODO: write_namespaces(object_literals, data,
+    #                  get_count=lambda prefix: data['statements']['statements']['subjects'].get('prefix', 0),
+    #                  check_prefix=lambda prefix: prefix in data['statements']['statements']['subjects'])
 
     write_root(file, root)
 
