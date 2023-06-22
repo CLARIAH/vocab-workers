@@ -51,8 +51,8 @@ def grab_value(path, root, func=None):
 
 
 def get_record(id):
-    def create_summary_for(elem, is_obj=False):
-        summary = {
+    def create_summary_for(elem):
+        return {
             "count": grab_value("./cmd:count", elem, int),
             "stats": [{
                 "uri": grab_value("./cmd:URI", ns_elem),
@@ -61,16 +61,15 @@ def get_record(id):
             } for ns_elem in elementpath.select(elem, "./cmd:Namespaces/cmd:Namespace", ns)]
         }
 
-        if is_obj:
-            classes_root = grab_first("./cmd:Classes", elem)
-            literals_root = grab_first("./cmd:Literals", elem)
-
-            summary.update(
-                classes=create_summary_for(classes_root) if classes_root is not None else None,
-                literals=create_summary_for(literals_root) if literals_root is not None else None
-            )
-
-        return summary
+    def create_list_for(elem):
+        return {
+            "list": [{
+                "uri": grab_value("./cmd:URI", list_item_elem),
+                "prefix": grab_value("./cmd:prefix", list_item_elem),
+                "name": grab_value("./cmd:name", list_item_elem),
+                "count": grab_value("./cmd:count", list_item_elem, int),
+            } for list_item_elem in elementpath.select(elem, "./cmd:List/cmd:Item", ns)]
+        }
 
     def create_location_for(elem):
         return {
@@ -113,10 +112,32 @@ def get_record(id):
                 },
                 "stats": create_summary_for(grab_first(f"{voc_root}/cmd:Summary", root)),
                 "subjects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects", root)),
-                "predicates": create_summary_for(
-                    grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
-                "objects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root),
-                                              is_obj=True),
+                "predicates": {
+                    **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
+                    **create_list_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
+                },
+                "objects": {
+                    **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root)),
+                    "classes": {
+                        **create_summary_for(
+                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
+                        **create_list_for(
+                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
+                    },
+                    "literals": {
+                        **create_summary_for(
+                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
+                        **create_list_for(
+                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
+                        "languages": [{
+                            "name": grab_value("./cmd:code", lang_elem),
+                            "count": grab_value("./cmd:count", lang_elem, int),
+                        } for lang_elem in
+                            elementpath.select(root,
+                                               f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals/cmd:Languages/cmd:Language",
+                                               ns)],
+                    },
+                },
             } if grab_first(f"{voc_root}/cmd:Summary", root) is not None else None,
             "versions": sorted([{
                 "version": grab_value("./cmd:version", elem),
@@ -151,6 +172,26 @@ def write_summary(id, data):
                     count_elem = etree.SubElement(namespace, f"{ns_prefix}count", nsmap=ns)
                     count_elem.text = str(count)
 
+    def write_items_list(root, data, items):
+        list_elem = etree.SubElement(root, f"{ns_prefix}List", nsmap=ns)
+        for uri, count in items.items():
+            prefix, name = uri.split(':', 1)
+            uri = list(data['prefixes'].keys())[list(data['prefixes'].values()).index(prefix)]
+
+            list_item_elem = etree.SubElement(list_elem, f"{ns_prefix}Item", nsmap=ns)
+
+            list_item_uri_elem = etree.SubElement(list_item_elem, f"{ns_prefix}URI", nsmap=ns)
+            list_item_uri_elem.text = uri
+
+            list_item_prefix_elem = etree.SubElement(list_item_elem, f"{ns_prefix}prefix", nsmap=ns)
+            list_item_prefix_elem.text = prefix
+
+            list_item_name_elem = etree.SubElement(list_item_elem, f"{ns_prefix}name", nsmap=ns)
+            list_item_name_elem.text = name
+
+            list_item_count_elem = etree.SubElement(list_item_elem, f"{ns_prefix}count", nsmap=ns)
+            list_item_count_elem.text = str(count)
+
     file = get_file_for_id(id)
     root = read_root(file)
     vocab = grab_first(voc_root, root)
@@ -160,7 +201,10 @@ def write_summary(id, data):
         vocab.remove(summary)
 
     summary = etree.SubElement(vocab, f"{ns_prefix}Summary", nsmap=ns)
+
     statements = etree.SubElement(summary, f"{ns_prefix}Statements", nsmap=ns)
+    statements_count = etree.SubElement(statements, f"{ns_prefix}count", nsmap=ns)
+    statements_count.text = str(0)
 
     subjects = etree.SubElement(statements, f"{ns_prefix}Subjects", nsmap=ns)
     subjects_count = etree.SubElement(subjects, f"{ns_prefix}count", nsmap=ns)
@@ -176,11 +220,21 @@ def write_summary(id, data):
 
     object_classes = etree.SubElement(objects, f"{ns_prefix}Classes", nsmap=ns)
     object_classes_count = etree.SubElement(object_classes, f"{ns_prefix}count", nsmap=ns)
-    object_classes_count.text = str(0)  # TODO
+    object_classes_count.text = str(0)
 
     object_literals = etree.SubElement(objects, f"{ns_prefix}Literals", nsmap=ns)
     object_literals_count = etree.SubElement(object_literals, f"{ns_prefix}count", nsmap=ns)
-    object_literals_count.text = str(0)  # TODO
+    object_literals_count.text = str(0)
+
+    literal_languages = etree.SubElement(object_literals, f"{ns_prefix}Languages", nsmap=ns)
+    for lang, count in data['statements']['statements']['objects']['literals']['lang'].items():
+        literal_language = etree.SubElement(literal_languages, f"{ns_prefix}Language", nsmap=ns)
+
+        literal_language_code = etree.SubElement(literal_language, f"{ns_prefix}code", nsmap=ns)
+        literal_language_code.text = lang
+
+        literal_language_count = etree.SubElement(literal_language, f"{ns_prefix}count", nsmap=ns)
+        literal_language_count.text = str(count)
 
     write_namespaces(summary, data, get_count=lambda prefix: data['stats'].get(prefix, 0))
     write_namespaces(subjects, data,
@@ -189,12 +243,19 @@ def write_summary(id, data):
     write_namespaces(predicates, data,
                      get_count=lambda prefix: data['statements']['statements']['predicates'].get(prefix, 0),
                      check_prefix=lambda prefix: prefix in data['statements']['statements']['predicates'])
-    write_namespaces(object_classes, data,
+    write_namespaces(objects, data,
                      get_count=lambda prefix: data['statements']['statements']['objects'].get(prefix, 0),
                      check_prefix=lambda prefix: prefix in data['statements']['statements']['objects'])
-    # TODO: write_namespaces(object_literals, data,
-    #                  get_count=lambda prefix: data['statements']['statements']['subjects'].get('prefix', 0),
-    #                  check_prefix=lambda prefix: prefix in data['statements']['statements']['subjects'])
+    write_namespaces(object_classes, data,
+                     get_count=lambda prefix: data['statements']['statements']['objects']['classes'].get(prefix, 0),
+                     check_prefix=lambda prefix: prefix in data['statements']['statements']['objects']['classes'])
+    write_namespaces(object_literals, data,
+                     get_count=lambda prefix: data['statements']['statements']['objects']['literals'].get('prefix', 0),
+                     check_prefix=lambda prefix: prefix in data['statements']['statements']['objects']['literals'])
+
+    write_items_list(predicates, data, data['statements']['statements']['predicates']['list'])
+    write_items_list(object_classes, data, data['statements']['statements']['objects']['classes']['list'])
+    write_items_list(object_literals, data, data['statements']['statements']['objects']['literals']['list'])
 
     write_root(file, root)
 
