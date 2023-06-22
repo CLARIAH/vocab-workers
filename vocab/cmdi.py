@@ -174,23 +174,24 @@ def write_summary(id, data):
 
     def write_items_list(root, data, items):
         list_elem = etree.SubElement(root, f"{ns_prefix}List", nsmap=ns)
-        for uri, count in items.items():
+        for uri, count in [(uri, 0) for uri in items] if type(items) is list else items.items():
             prefix, name = uri.split(':', 1)
-            uri = list(data['prefixes'].keys())[list(data['prefixes'].values()).index(prefix)]
+            if prefix in data['prefixes'].values():
+                uri = list(data['prefixes'].keys())[list(data['prefixes'].values()).index(prefix)]
 
-            list_item_elem = etree.SubElement(list_elem, f"{ns_prefix}Item", nsmap=ns)
+                list_item_elem = etree.SubElement(list_elem, f"{ns_prefix}Item", nsmap=ns)
 
-            list_item_uri_elem = etree.SubElement(list_item_elem, f"{ns_prefix}URI", nsmap=ns)
-            list_item_uri_elem.text = uri
+                list_item_uri_elem = etree.SubElement(list_item_elem, f"{ns_prefix}URI", nsmap=ns)
+                list_item_uri_elem.text = uri
 
-            list_item_prefix_elem = etree.SubElement(list_item_elem, f"{ns_prefix}prefix", nsmap=ns)
-            list_item_prefix_elem.text = prefix
+                list_item_prefix_elem = etree.SubElement(list_item_elem, f"{ns_prefix}prefix", nsmap=ns)
+                list_item_prefix_elem.text = prefix
 
-            list_item_name_elem = etree.SubElement(list_item_elem, f"{ns_prefix}name", nsmap=ns)
-            list_item_name_elem.text = name
+                list_item_name_elem = etree.SubElement(list_item_elem, f"{ns_prefix}name", nsmap=ns)
+                list_item_name_elem.text = name
 
-            list_item_count_elem = etree.SubElement(list_item_elem, f"{ns_prefix}count", nsmap=ns)
-            list_item_count_elem.text = str(count)
+                list_item_count_elem = etree.SubElement(list_item_elem, f"{ns_prefix}count", nsmap=ns)
+                list_item_count_elem.text = str(count)
 
     file = get_file_for_id(id)
     root = read_root(file)
@@ -220,14 +221,14 @@ def write_summary(id, data):
 
     object_classes = etree.SubElement(objects, f"{ns_prefix}Classes", nsmap=ns)
     object_classes_count = etree.SubElement(object_classes, f"{ns_prefix}count", nsmap=ns)
-    object_classes_count.text = str(0)
+    object_classes_count.text = str(data['statements']['objects'])
 
     object_literals = etree.SubElement(objects, f"{ns_prefix}Literals", nsmap=ns)
     object_literals_count = etree.SubElement(object_literals, f"{ns_prefix}count", nsmap=ns)
-    object_literals_count.text = str(0)
+    object_literals_count.text = str(data['statements']['literals']['count'])
 
     literal_languages = etree.SubElement(object_literals, f"{ns_prefix}Languages", nsmap=ns)
-    for lang, count in data['statements']['statements']['objects']['literals']['lang'].items():
+    for lang, count in data['statements']['literals']['lang'].items():
         literal_language = etree.SubElement(literal_languages, f"{ns_prefix}Language", nsmap=ns)
 
         literal_language_code = etree.SubElement(literal_language, f"{ns_prefix}code", nsmap=ns)
@@ -246,16 +247,22 @@ def write_summary(id, data):
     write_namespaces(objects, data,
                      get_count=lambda prefix: data['statements']['statements']['objects'].get(prefix, 0),
                      check_prefix=lambda prefix: prefix in data['statements']['statements']['objects'])
-    write_namespaces(object_classes, data,
-                     get_count=lambda prefix: data['statements']['statements']['objects']['classes'].get(prefix, 0),
-                     check_prefix=lambda prefix: prefix in data['statements']['statements']['objects']['classes'])
-    write_namespaces(object_literals, data,
-                     get_count=lambda prefix: data['statements']['statements']['objects']['literals'].get('prefix', 0),
-                     check_prefix=lambda prefix: prefix in data['statements']['statements']['objects']['literals'])
 
-    write_items_list(predicates, data, data['statements']['statements']['predicates']['list'])
-    write_items_list(object_classes, data, data['statements']['statements']['objects']['classes']['list'])
-    write_items_list(object_literals, data, data['statements']['statements']['objects']['literals']['list'])
+    if 'classes' in data['statements']:
+        write_namespaces(object_classes, data,
+                         get_count=lambda prefix: data['statements']['classes'].get(prefix, 0),
+                         check_prefix=lambda prefix: prefix in data['statements']['classes'])
+
+    write_namespaces(object_literals, data,
+                     get_count=lambda prefix: data['statements']['literals']['stats'].get('prefix', 0),
+                     check_prefix=lambda prefix: prefix in data['statements']['literals']['stats'])
+
+    # TODO: write_items_list(predicates, data, data['statements']['predicates'])
+
+    if 'list_of_classes' in data['statements']:
+        write_items_list(object_classes, data, data['statements']['list_of_classes'])
+
+    write_items_list(object_literals, data, data['statements']['literals']['list'])
 
     write_root(file, root)
 
