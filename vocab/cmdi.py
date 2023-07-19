@@ -172,26 +172,26 @@ def write_summary(id, data):
                     count_elem = etree.SubElement(namespace, f"{ns_prefix}count", nsmap=ns)
                     count_elem.text = str(count)
 
-    def write_items_list(root, data, items):
-        list_elem = etree.SubElement(root, f"{ns_prefix}List", nsmap=ns)
+    def write_namespace_items(root, data, items):
+        namespace_items_elem = etree.SubElement(root, f"{ns_prefix}NamespaceItems", nsmap=ns)
         for uri, count in [(uri, 0) for uri in items] if type(items) is list else items.items():
             prefix, name = uri.split(':', 1)
             if prefix in data['prefixes'].values():
                 uri = list(data['prefixes'].keys())[list(data['prefixes'].values()).index(prefix)]
 
-                list_item_elem = etree.SubElement(list_elem, f"{ns_prefix}Item", nsmap=ns)
+                namespace_item_elem = etree.SubElement(namespace_items_elem, f"{ns_prefix}NamespaceItem", nsmap=ns)
 
-                list_item_uri_elem = etree.SubElement(list_item_elem, f"{ns_prefix}URI", nsmap=ns)
-                list_item_uri_elem.text = uri
+                namespace_item_uri_elem = etree.SubElement(namespace_item_elem, f"{ns_prefix}URI", nsmap=ns)
+                namespace_item_uri_elem.text = uri
 
-                list_item_prefix_elem = etree.SubElement(list_item_elem, f"{ns_prefix}prefix", nsmap=ns)
-                list_item_prefix_elem.text = prefix
+                namespace_item_prefix_elem = etree.SubElement(namespace_item_elem, f"{ns_prefix}prefix", nsmap=ns)
+                namespace_item_prefix_elem.text = prefix
 
-                list_item_name_elem = etree.SubElement(list_item_elem, f"{ns_prefix}name", nsmap=ns)
-                list_item_name_elem.text = name
+                namespace_item_name_elem = etree.SubElement(namespace_item_elem, f"{ns_prefix}name", nsmap=ns)
+                namespace_item_name_elem.text = name
 
-                list_item_count_elem = etree.SubElement(list_item_elem, f"{ns_prefix}count", nsmap=ns)
-                list_item_count_elem.text = str(count)
+                namespace_item_count_elem = etree.SubElement(namespace_item_elem, f"{ns_prefix}count", nsmap=ns)
+                namespace_item_count_elem.text = str(count)
 
     file = get_file_for_id(id)
     root = read_root(file)
@@ -257,12 +257,12 @@ def write_summary(id, data):
                      get_count=lambda prefix: data['statements']['literals']['stats'].get('prefix', 0),
                      check_prefix=lambda prefix: prefix in data['statements']['literals']['stats'])
 
-    # TODO: write_items_list(predicates, data, data['statements']['predicates'])
+    # TODO: write_namespace_items(predicates, data, data['statements']['predicates'])
 
     if 'list_of_classes' in data['statements']:
-        write_items_list(object_classes, data, data['statements']['list_of_classes'])
+        write_namespace_items(object_classes, data, data['statements']['list_of_classes'])
 
-    write_items_list(object_literals, data, data['statements']['literals']['list'])
+    write_namespace_items(object_literals, data, data['statements']['literals']['list'])
 
     write_root(file, root)
 
