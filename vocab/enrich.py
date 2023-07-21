@@ -57,15 +57,15 @@ def summarizer(id):
         log.info(f'No record found for {id}!')
 
 
-def skosmos(id):
-    record = get_record(id)
-    if record and record['summary'] and \
-            next(filter(lambda stat: stat['prefix'] == 'skos', record['summary']['stats']), None):
-        log.info(f'SKOS found for {id}')
-
-        write_location(id, f'https://skosmos.vocabs.dev.clariah.nl/{id}', 'homepage', 'skosmos')
-        write_location(id, f'', 'endpoint', 'sparql')
-
-        log.info(f'Wrote SKOS locations for {id}:')
-    else:
-        log.info(f'No SKOS found for {id}!')
+# def skosmos(id):
+#     record = get_record(id)
+#     if record and record['summary'] and \
+#             next(filter(lambda stat: stat['prefix'] == 'skos', record['summary']['stats']), None):
+#         log.info(f'SKOS found for {id}')
+#
+#         write_location(id, version, f'https://skosmos.vocabs.dev.clariah.nl/{id}', 'homepage', 'skosmos')
+#         write_location(id, version, f'', 'endpoint', 'sparql')
+#
+#         log.info(f'Wrote SKOS locations for {id}:')
+#     else:
+#         log.info(f'No SKOS found for {id}!')

@@ -267,25 +267,27 @@ def write_summary(id, data):
     write_root(file, root)
 
 
-def write_location(id, uri, type, recipe):
+def write_location(id, version, uri, type, recipe):
     file = get_file_for_id(id)
     root = read_root(file)
     vocab = grab_first(voc_root, root)
 
-    for location in elementpath.select(root, "./cmd:Location", ns):
-        if grab_value("./cmd:uri", location) == uri:
-            vocab.remove(location)
+    version_elem = grab_first(f"{voc_root}/cmd:Version/cmd:version[text()='{version}']/..", root)
+    if version_elem is not None:
+        for location in elementpath.select(version_elem, "./cmd:Location", ns):
+            if grab_value("./cmd:uri", location) == uri:
+                vocab.remove(location)
 
-    location = etree.SubElement(vocab, f"{ns_prefix}Location", nsmap=ns)
+        location = etree.SubElement(version_elem, f"{ns_prefix}Location", nsmap=ns)
 
-    uri_elem = etree.SubElement(location, f"{ns_prefix}uri", nsmap=ns)
-    uri_elem.text = uri
+        uri_elem = etree.SubElement(location, f"{ns_prefix}uri", nsmap=ns)
+        uri_elem.text = uri
 
-    type_elem = etree.SubElement(location, f"{ns_prefix}type", nsmap=ns)
-    type_elem.text = type
+        type_elem = etree.SubElement(location, f"{ns_prefix}type", nsmap=ns)
+        type_elem.text = type
 
-    if recipe:
-        recipe_elem = etree.SubElement(location, f"{ns_prefix}recipe", nsmap=ns)
-        recipe_elem.text = recipe
+        if recipe:
+            recipe_elem = etree.SubElement(location, f"{ns_prefix}recipe", nsmap=ns)
+            recipe_elem.text = recipe
 
-    write_root(file, root)
+        write_root(file, root)
