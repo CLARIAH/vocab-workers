@@ -1,29 +1,44 @@
-import os
 import logging
+from itertools import chain
 
-from rdflib import Graph
-from rdflib.plugin import register, Parser
-from pylode import OntPub
+from pylode import OntPub, PylodeError
+from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS
 
-from cmdi import get_record, write_location
+from vocab.util import load_remote_graph
+from vocab.cmdi import get_record, write_location
+from vocab.config import vocab_registry_url, docs_path
 
 log = logging.getLogger(__name__)
-vocab_registry_url = os.environ.get('VOCAB_REGISTRY_URL', 'https://localhost:5000')
-
-register('application/owl+xml', Parser, 'rdflib.plugins.parsers.rdfxml', 'RDFXMLParser')
 
 
 def get_file_for_id(id):
-    return os.environ.get('DOCS_PATH', '../data/docs/') + id + '.html'
+    return docs_path + id + '.html'
 
 
 def create_documentation(id):
-    def documentation_for_location(location):
+    def documentation_for_location(location, title):
         try:
             file = get_file_for_id(id)
+            graph = load_remote_graph(location['location'])
 
-            graph = Graph().parse(location=location['location'])
-            od = OntPub(ontology=graph)
+            try:
+                od = OntPub(ontology=graph)
+            except PylodeError:
+                subjects = chain(
+                    graph.subjects(RDF.type, OWL.Ontology),
+                    graph.subjects(RDF.type, PROF.Profile),
+                    graph.subjects(RDF.type, SKOS.ConceptScheme),
+                )
+
+                if subjects:
+                    for s in subjects:
+                        graph.add((s, DCTERMS.title, Literal(title)))
+                else:
+                    graph.add((URIRef(location['location']), RDF.type, OWL.Ontology))
+                    graph.add((URIRef(location['location']), DCTERMS.title, Literal(title)))
+
+                od = OntPub(ontology=graph)
+
             od.make_html(destination=file)
 
             uri = vocab_registry_url + '/doc/' + id
@@ -32,6 +47,7 @@ def create_documentation(id):
 
             return True
         except Exception as e:
+            log.error(f'Doc error for {id}: {e}')
             return False
 
     record = get_record(id)
@@ -42,12 +58,12 @@ def create_documentation(id):
 
             location = next(filter(lambda l: l['type'] == 'endpoint' and l['recipe'] is None, locations), None)
             if location:
-                created_documentation = documentation_for_location(location)
+                created_documentation = documentation_for_location(location, record['title'])
 
             if not created_documentation:
                 location = next(filter(lambda l: l['type'] == 'endpoint' and l['recipe'] == 'cache', locations), None)
                 if location:
-                    created_documentation = documentation_for_location(location)
+                    created_documentation = documentation_for_location(location, record['title'])
 
             if not location:
                 log.info(f'No endpoint found for {id}!')

@@ -1,6 +1,5 @@
 import os
 import logging
-import operator
 
 import elementpath
 import unicodedata
@@ -8,15 +7,17 @@ import unicodedata
 from lxml import etree
 from datetime import datetime
 
+from vocab.config import records_path
+
 log = logging.getLogger(__name__)
 
-ns = {"cmd": "http://www.clarin.eu/cmd/"}
-ns_prefix = '{http://www.clarin.eu/cmd/}'
+ns = {"cmd": "http://www.clarin.eu/cmd/1"}
+ns_prefix = '{http://www.clarin.eu/cmd/1}'
 voc_root = './cmd:Components/cmd:Vocabulary'
 
 
 def get_file_for_id(id):
-    return os.environ.get('RECORDS_PATH', '../data/records/') + id + '.cmdi'
+    return records_path + id + '.cmdi'
 
 
 def read_root(file):
@@ -38,9 +39,9 @@ def grab_first(path, root):
 def grab_value(path, root, func=None):
     content = elementpath.select(root, path, ns)
     if content and type(content[0]) == str:
-        content = unicodedata.normalize("NFKD", content[0]).strip()
+        content = unicodedata.normalize("NFKC", content[0]).strip()
     elif content and content[0].text is not None:
-        content = unicodedata.normalize("NFKD", content[0].text).strip()
+        content = unicodedata.normalize("NFKC", content[0].text).strip()
     else:
         content = None
 
@@ -82,6 +83,44 @@ def get_record(id):
     root = read_root(file)
 
     try:
+        summary_namespace = {
+            "namespace": {
+                "uri": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:URI", root),
+                "prefix": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:prefix", root)
+            }
+        } if grab_first(f"{voc_root}/cmd:Summary/cmd:Namespace", root) is not None else None
+
+        summary_statements = {
+            "stats": create_summary_for(grab_first(f"{voc_root}/cmd:Summary", root)),
+            "subjects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects", root)),
+            "predicates": {
+                **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
+                **create_list_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
+            },
+            "objects": {
+                **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root)),
+                "classes": {
+                    **create_summary_for(
+                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
+                    **create_list_for(
+                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
+                },
+                "literals": {
+                    **create_summary_for(
+                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
+                    **create_list_for(
+                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
+                    "languages": [{
+                        "name": grab_value("./cmd:code", lang_elem),
+                        "count": grab_value("./cmd:count", lang_elem, int),
+                    } for lang_elem in
+                        elementpath.select(root,
+                                           f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals/cmd:Languages/cmd:Language",
+                                           ns)],
+                },
+            }
+        } if grab_first(f"{voc_root}/cmd:Summary/cmd:Statements", root) is not None else None
+
         record = {
             "id": id,
             "title": grab_value(
@@ -106,46 +145,16 @@ def get_record(id):
                 "rating": None
             } for elem in elementpath.select(root, f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher", ns)],
             "summary": {
-                "namespace": {
-                    "uri": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:URI", root),
-                    "prefix": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:prefix", root)
-                },
-                "stats": create_summary_for(grab_first(f"{voc_root}/cmd:Summary", root)),
-                "subjects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects", root)),
-                "predicates": {
-                    **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
-                    **create_list_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
-                },
-                "objects": {
-                    **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root)),
-                    "classes": {
-                        **create_summary_for(
-                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
-                        **create_list_for(
-                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
-                    },
-                    "literals": {
-                        **create_summary_for(
-                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
-                        **create_list_for(
-                            grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
-                        "languages": [{
-                            "name": grab_value("./cmd:code", lang_elem),
-                            "count": grab_value("./cmd:count", lang_elem, int),
-                        } for lang_elem in
-                            elementpath.select(root,
-                                               f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals/cmd:Languages/cmd:Language",
-                                               ns)],
-                    },
-                },
-            } if grab_first(f"{voc_root}/cmd:Summary", root) is not None else None,
+                **(summary_namespace if summary_namespace is not None else {}),
+                **(summary_statements if summary_statements is not None else {}),
+            } if summary_namespace is not None or summary_statements is not None else None,
             "versions": sorted([{
                 "version": grab_value("./cmd:version", elem),
                 "validFrom": grab_value("./cmd:validFrom", elem),
                 "locations": [create_location_for(loc_elem) for loc_elem in
                               elementpath.select(elem, "./cmd:Location", ns)],
             } for elem in elementpath.select(root, f"{voc_root}/cmd:Version", ns)],
-                key=operator.itemgetter('validFrom', 'version'), reverse=True)
+                key=lambda x: (x['validFrom'] is not None, x['version']), reverse=True)
         }
     except Exception as e:
         log.error(f'Cannot parse record with id {id}')
@@ -154,7 +163,7 @@ def get_record(id):
     return record
 
 
-def write_summary(id, data):
+def write_summary_statements(id, data):
     def write_namespaces(root, data, get_count, check_prefix=lambda prefix: True):
         namespaces = etree.SubElement(root, f"{ns_prefix}Namespaces", nsmap=ns)
         for uri, prefix in data['prefixes'].items():
@@ -198,10 +207,16 @@ def write_summary(id, data):
     vocab = grab_first(voc_root, root)
 
     summary = grab_first("./cmd:Summary", vocab)
-    if summary is not None:
-        vocab.remove(summary)
+    if summary is None:
+        summary = etree.SubElement(vocab, f"{ns_prefix}Summary", nsmap=ns)
 
-    summary = etree.SubElement(vocab, f"{ns_prefix}Summary", nsmap=ns)
+    statements = grab_first("./cmd:Statements", summary)
+    if statements:
+        summary.remove(statements)
+
+    namespaces = grab_first("./cmd:Namespaces", summary)
+    if statements:
+        summary.remove(namespaces)
 
     statements = etree.SubElement(summary, f"{ns_prefix}Statements", nsmap=ns)
     statements_count = etree.SubElement(statements, f"{ns_prefix}count", nsmap=ns)
@@ -270,13 +285,12 @@ def write_summary(id, data):
 def write_location(id, version, uri, type, recipe):
     file = get_file_for_id(id)
     root = read_root(file)
-    vocab = grab_first(voc_root, root)
 
     version_elem = grab_first(f"{voc_root}/cmd:Version/cmd:version[text()='{version}']/..", root)
     if version_elem is not None:
         for location in elementpath.select(version_elem, "./cmd:Location", ns):
-            if grab_value("./cmd:uri", location) == uri:
-                vocab.remove(location)
+            if grab_value("./cmd:recipe", location) == recipe:
+                version_elem.remove(location)
 
         location = etree.SubElement(version_elem, f"{ns_prefix}Location", nsmap=ns)
 
@@ -291,3 +305,30 @@ def write_location(id, version, uri, type, recipe):
             recipe_elem.text = recipe
 
         write_root(file, root)
+
+
+def write_summary_namespace(id, uri, prefix):
+    file = get_file_for_id(id)
+    root = read_root(file)
+    vocab = grab_first(voc_root, root)
+
+    summary = grab_first("./cmd:Summary", vocab)
+    if summary is None:
+        summary = etree.SubElement(vocab, f"{ns_prefix}Summary", nsmap=ns)
+
+    namespace = grab_first("./cmd:Namespace", summary)
+    if namespace is None:
+        namespace = etree.SubElement(summary, f"{ns_prefix}Namespace", nsmap=ns)
+
+    uri_elem = grab_first("./cmd:URI", namespace)
+    if uri_elem is None:
+        uri_elem = etree.SubElement(namespace, f"{ns_prefix}URI", nsmap=ns)
+
+    prefix_elem = grab_first("./cmd:prefix", namespace)
+    if prefix_elem is None:
+        prefix_elem = etree.SubElement(namespace, f"{ns_prefix}prefix", nsmap=ns)
+
+    uri_elem.text = uri
+    prefix_elem.text = prefix
+
+    write_root(file, root)

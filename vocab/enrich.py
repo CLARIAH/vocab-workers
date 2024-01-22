@@ -1,12 +1,11 @@
-import os
 import logging
 import requests
 
 from vocab.util import session
-from vocab.cmdi import get_record, write_summary, write_location
+from vocab.cmdi import get_record, write_summary_statements, write_summary_namespace
+from vocab.config import summarizer_url
 
 log = logging.getLogger(__name__)
-url = os.environ.get('SUMMARIZER_URL', 'https://api.zandbak.dans.knaw.nl/summarizer')
 
 
 def lov(id):
@@ -14,18 +13,23 @@ def lov(id):
     if response.status_code == requests.codes.ok:
         data = response.json()
         log.info(f'Work wit vocab {id} results: {data}')
+
+        uri = data['uri']
+        prefix = data['prefix']
+        if uri and prefix:
+            write_summary_namespace(id, uri, prefix)
     else:
         log.info(f'No vocab {id} results!')
 
 
 def summarizer(id):
     def summarizer_for_location(location):
-        response = session.get(url, params={'url': location['location']})
+        response = session.get(summarizer_url, params={'url': location['location']})
         if response.status_code == requests.codes.ok:
             data = response.json()
             log.info(f'Work with summarizer results for {id}: {data}')
 
-            write_summary(id, data)
+            write_summary_statements(id, data)
             log.info(f'Wrote summarizer results for {id}: {data}')
 
             return True
@@ -55,7 +59,6 @@ def summarizer(id):
             log.info(f'No version found for {id}!')
     else:
         log.info(f'No record found for {id}!')
-
 
 # def skosmos(id):
 #     record = get_record(id)
