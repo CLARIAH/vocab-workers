@@ -1,13 +1,17 @@
 import os
 import logging
-
 import elementpath
 import unicodedata
 
 from lxml import etree
+from lxml.etree import Element
 from datetime import datetime
+from pydantic import BaseModel
+from inspect import cleandoc
+from typing import Any, Optional, List, Generator, Tuple
 
 from vocab.config import records_path
+from vocab.util.fs import get_cached_version
 
 log = logging.getLogger(__name__)
 
@@ -15,23 +19,138 @@ ns = {"cmd": "http://www.clarin.eu/cmd/1"}
 ns_prefix = '{http://www.clarin.eu/cmd/1}'
 voc_root = './cmd:Components/cmd:Vocabulary'
 
+xpath_code = "./cmd:code"
+xpath_count = "./cmd:count"
+xpath_name = "./cmd:name"
+xpath_type = "./cmd:type"
+xpath_recipe = "./cmd:recipe"
+xpath_URI = "./cmd:URI"
+xpath_uri = "./cmd:uri"
+xpath_prefix = "./cmd:prefix"
+xpath_version_no = "./cmd:version"
+xpath_valid_from = "./cmd:validFrom"
 
-def get_file_for_id(id):
-    return records_path + id + '.cmdi'
+xpath_location_elem = "./cmd:Location"
+xpath_namespace_elem = "./cmd:Namespaces/cmd:Namespace"
+xpath_list_item_elem = "./cmd:List/cmd:Item"
+
+xpath_vocab_type = f"{voc_root}/cmd:type"
+xpath_title = f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],base-uri(/cmd:CMD)[normalize-space(.)!=''])[1]"
+xpath_description = f"{voc_root}/cmd:Description/cmd:description[@xml:lang='en']"
+xpath_license = f"{voc_root}/cmd:License/cmd:url"
+xpath_publisher = f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher"
+xpath_location = f"{voc_root}/cmd:Location"
+xpath_version = f"{voc_root}/cmd:Version"
+xpath_summary = f"{voc_root}/cmd:Summary"
+
+xpath_summary_ns = f"{voc_root}/cmd:Summary/cmd:Namespace"
+xpath_summary_ns_uri = f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:URI"
+xpath_summary_ns_prefix = f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:prefix"
+
+xpath_summary_st = f"{voc_root}/cmd:Summary/cmd:Statements"
+xpath_summary_st_subj = f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects"
+xpath_summary_st_pred = f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates"
+xpath_summary_st_obj = f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects"
+xpath_summary_st_obj_classes = f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes"
+xpath_summary_st_obj_literals = f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals"
+xpath_summary_st_obj_literals_lang = f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals/cmd:Languages/cmd:Language"
 
 
-def read_root(file):
+class Location(BaseModel):
+    location: str
+    type: str
+    recipe: Optional[str] = None
+
+
+class Usage(BaseModel):
+    count: int
+    outOf: int
+
+
+class Recommendation(BaseModel):
+    publisher: str
+    rating: Optional[str] = None
+
+
+class Version(BaseModel):
+    version: str
+    validFrom: Optional[datetime] = None
+    locations: List[Location]
+
+
+class Namespace(BaseModel):
+    uri: str
+    prefix: str
+
+
+class SummaryNamespaceStats(Namespace):
+    count: Optional[int] = None
+
+
+class SummaryNamespaceNameStats(SummaryNamespaceStats):
+    name: str
+
+
+class SummaryStats(BaseModel):
+    count: Optional[int] = None
+    stats: List[SummaryNamespaceStats]
+
+
+class SummaryListStats(SummaryStats):
+    list: List[SummaryNamespaceNameStats]
+
+
+class SummaryListLanguageStats(SummaryListStats):
+    languages: dict[str, int]
+
+
+class SummaryObjectStats(SummaryStats):
+    classes: SummaryListStats
+    literals: SummaryListLanguageStats
+
+
+class Summary(BaseModel):
+    namespace: Optional[Namespace] = None
+    stats: Optional[SummaryStats] = None
+    subjects: Optional[SummaryStats] = None
+    predicates: Optional[SummaryListStats] = None
+    objects: Optional[SummaryObjectStats] = None
+
+
+class Vocab(BaseModel):
+    id: str
+    type: str
+    title: str
+    description: str
+    license: str
+    versioningPolicy: Optional[str] = None
+    sustainabilityPolicy: Optional[str] = None
+    created: datetime
+    modified: datetime
+    locations: List[Location]
+    reviews: List[Any] = []
+    usage: Usage
+    recommendations: List[Recommendation]
+    summary: Optional[Summary] = None
+    versions: List[Version]
+
+
+def get_file_for_id(id: str) -> str:
+    return os.path.join(records_path, id + '.cmdi')
+
+
+def read_root(file: str) -> Element:
     parsed = etree.parse(file)
     return parsed.getroot()
 
 
-def write_root(file, root):
+def write_root(file: str, root: Element) -> None:
     tree = etree.ElementTree(root)
     etree.indent(tree, space='    ', level=0)
     tree.write(file, encoding='utf-8')
 
 
-def grab_first(path, root):
+def grab_first(path: str, root: Element) -> Element:
     content = elementpath.select(root, path, ns)
     return content[0] if content else None
 
@@ -45,122 +164,122 @@ def grab_value(path, root, func=None):
     else:
         content = None
 
+    if content:
+        content = cleandoc(content)
+
     if content and func:
         content = func(content)
 
     return content
 
 
-def get_record(id):
-    def create_summary_for(elem):
-        return {
-            "count": grab_value("./cmd:count", elem, int),
-            "stats": [{
-                "uri": grab_value("./cmd:URI", ns_elem),
-                "prefix": grab_value("./cmd:prefix", ns_elem),
-                "count": grab_value("./cmd:count", ns_elem, int),
-            } for ns_elem in elementpath.select(elem, "./cmd:Namespaces/cmd:Namespace", ns)]
-        }
+def get_record(id: str) -> Vocab:
+    def create_summary_for(elem: Element) -> SummaryStats:
+        return SummaryStats(
+            count=grab_value(xpath_count, elem, int),
+            stats=[SummaryNamespaceStats(
+                uri=grab_value(xpath_URI, ns_elem),
+                prefix=grab_value(xpath_prefix, ns_elem),
+                count=grab_value(xpath_count, ns_elem, int),
+            ) for ns_elem in elementpath.select(elem, xpath_namespace_elem, ns)]
+        )
 
-    def create_list_for(elem):
-        return {
-            "list": [{
-                "uri": grab_value("./cmd:URI", list_item_elem),
-                "prefix": grab_value("./cmd:prefix", list_item_elem),
-                "name": grab_value("./cmd:name", list_item_elem),
-                "count": grab_value("./cmd:count", list_item_elem, int),
-            } for list_item_elem in elementpath.select(elem, "./cmd:List/cmd:Item", ns)]
-        }
+    def create_list_for(elem: Element) -> List[SummaryNamespaceNameStats]:
+        return [SummaryNamespaceNameStats(
+            uri=grab_value(xpath_URI, list_item_elem),
+            prefix=grab_value(xpath_prefix, list_item_elem),
+            name=grab_value(xpath_name, list_item_elem),
+            count=grab_value(xpath_count, list_item_elem, int),
+        ) for list_item_elem in elementpath.select(elem, xpath_list_item_elem, ns)]
 
-    def create_location_for(elem):
-        return {
-            "location": grab_value("./cmd:uri", elem),
-            "type": grab_value("./cmd:type", elem),
-            "recipe": grab_value("./cmd:recipe", elem),
-        }
+    def create_location_for(elem: Element) -> Location:
+        return Location(
+            location=grab_value(xpath_uri, elem),
+            type=grab_value(xpath_type, elem),
+            recipe=grab_value(xpath_recipe, elem),
+        )
 
     file = get_file_for_id(id)
     root = read_root(file)
 
     try:
-        summary_namespace = {
-            "namespace": {
-                "uri": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:URI", root),
-                "prefix": grab_value(f"{voc_root}/cmd:Summary/cmd:Namespace/cmd:prefix", root)
-            }
-        } if grab_first(f"{voc_root}/cmd:Summary/cmd:Namespace", root) is not None else None
+        summary_namespace = Namespace(
+            uri=grab_value(xpath_summary_ns_uri, root),
+            prefix=grab_value(xpath_summary_ns_prefix, root)
+        ) if grab_first(xpath_summary_ns, root) is not None else None
 
-        summary_statements = {
-            "stats": create_summary_for(grab_first(f"{voc_root}/cmd:Summary", root)),
-            "subjects": create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Subjects", root)),
-            "predicates": {
-                **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
-                **create_list_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Predicates", root)),
-            },
-            "objects": {
-                **create_summary_for(grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects", root)),
-                "classes": {
-                    **create_summary_for(
-                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
-                    **create_list_for(
-                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Classes", root)),
-                },
-                "literals": {
-                    **create_summary_for(
-                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
-                    **create_list_for(
-                        grab_first(f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals", root)),
-                    "languages": [{
-                        "name": grab_value("./cmd:code", lang_elem),
-                        "count": grab_value("./cmd:count", lang_elem, int),
-                    } for lang_elem in
-                        elementpath.select(root,
-                                           f"{voc_root}/cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals/cmd:Languages/cmd:Language",
-                                           ns)],
-                },
-            }
-        } if grab_first(f"{voc_root}/cmd:Summary/cmd:Statements", root) is not None else None
+        summary = Summary(
+            namespace=summary_namespace,
+            stats=create_summary_for(grab_first(xpath_summary, root)),
+            subjects=create_summary_for(grab_first(xpath_summary_st_subj, root)),
+            predicates=SummaryListStats(
+                **create_summary_for(grab_first(xpath_summary_st_pred, root)).model_dump(),
+                list=create_list_for(grab_first(xpath_summary_st_pred, root)),
+            ),
+            objects=SummaryObjectStats(
+                **create_summary_for(grab_first(xpath_summary_st_obj, root)).model_dump(),
+                classes=SummaryListStats(
+                    **create_summary_for(grab_first(xpath_summary_st_obj_classes, root)).model_dump(),
+                    list=create_list_for(grab_first(xpath_summary_st_obj_classes, root)),
+                ),
+                literals=SummaryListLanguageStats(
+                    **create_summary_for(grab_first(xpath_summary_st_obj_literals, root)).model_dump(),
+                    list=create_list_for(grab_first(xpath_summary_st_obj_literals, root)),
+                    languages={
+                        grab_value(xpath_code, lang_elem): grab_value(xpath_count, lang_elem, int)
+                        for lang_elem in elementpath.select(root, xpath_summary_st_obj_literals_lang, ns)
+                    },
+                ),
+            )
+        ) if grab_first(xpath_summary_st, root) is not None else (
+            Summary(namespace=summary_namespace)) if summary_namespace is not None else None
 
-        record = {
-            "id": id,
-            "title": grab_value(
-                f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],base-uri(/cmd:CMD)[normalize-space(.)!=''])[1]",
-                root),
-            "description": grab_value(f"{voc_root}/cmd:Description/cmd:description[@xml:lang='en']", root),
-            "license": grab_value(f"{voc_root}/cmd:License/cmd:url",
-                                  root) or 'http://rightsstatements.org/vocab/UND/1.0/',
-            "versioningPolicy": None,
-            "sustainabilityPolicy": None,
-            "created": datetime.utcfromtimestamp(os.path.getctime(file)).isoformat(),
-            "modified": datetime.utcfromtimestamp(os.path.getmtime(file)).isoformat(),
-            "locations": [create_location_for(elem) for elem in
-                          elementpath.select(root, f"{voc_root}/cmd:Location", ns)],
-            "reviews": [],
-            "usage": {
-                "count": 0,
-                "outOf": 0
-            },
-            "recommendations": [{
-                "publisher": grab_value("./cmd:name", elem),
-                "rating": None
-            } for elem in elementpath.select(root, f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher", ns)],
-            "summary": {
-                **(summary_namespace if summary_namespace is not None else {}),
-                **(summary_statements if summary_statements is not None else {}),
-            } if summary_namespace is not None or summary_statements is not None else None,
-            "versions": sorted([{
-                "version": grab_value("./cmd:version", elem),
-                "validFrom": grab_value("./cmd:validFrom", elem),
-                "locations": [create_location_for(loc_elem) for loc_elem in
-                              elementpath.select(elem, "./cmd:Location", ns)],
-            } for elem in elementpath.select(root, f"{voc_root}/cmd:Version", ns)],
-                key=lambda x: (x['validFrom'] is not None, x['version']), reverse=True)
-        }
+        record = Vocab(
+            id=id,
+            type=grab_value(xpath_vocab_type, root),
+            title=grab_value(xpath_title, root),
+            description=grab_value(xpath_description, root),
+            license=grab_value(xpath_license, root) or 'http://rightsstatements.org/vocab/UND/1.0/',
+            versioningPolicy=None,
+            sustainabilityPolicy=None,
+            created=datetime.utcfromtimestamp(os.path.getctime(file)).isoformat(),
+            modified=datetime.utcfromtimestamp(os.path.getmtime(file)).isoformat(),
+            locations=[create_location_for(elem)
+                       for elem in elementpath.select(root, xpath_location, ns)],
+            reviews=[],
+            usage=Usage(count=0, outOf=0),
+            recommendations=[Recommendation(publisher=grab_value(xpath_name, elem), rating=None)
+                             for elem in elementpath.select(root, xpath_publisher, ns)],
+            summary=summary,
+            versions=sorted([Version(
+                version=grab_value(xpath_version_no, elem),
+                validFrom=grab_value(xpath_valid_from, elem),
+                locations=[create_location_for(loc_elem)
+                           for loc_elem in elementpath.select(elem, xpath_location_elem, ns)]
+            ) for elem in elementpath.select(root, xpath_version, ns)],
+                key=lambda x: (x.validFrom is not None, x.version), reverse=True)
+        )
     except Exception as e:
         log.error(f'Cannot parse record with id {id}')
         raise e
 
     return record
+
+
+def with_version(id: str) -> Generator[Tuple[Vocab, Version], None, None]:
+    record = get_record(id)
+    if record and record.versions:
+        for version in record.versions:
+            yield record, version
+    else:
+        log.info(f'No record or versions found for {id}!')
+
+
+def with_version_and_dump(id: str) -> Generator[Tuple[Vocab, Version, str], None, None]:
+    for record, version in with_version(id):
+        cached_version_path = get_cached_version(id, version.version)
+        if cached_version_path is not None:
+            yield record, version, cached_version_path
 
 
 def write_summary_statements(id, data):
@@ -282,7 +401,7 @@ def write_summary_statements(id, data):
     write_root(file, root)
 
 
-def write_location(id, version, uri, type, recipe):
+def write_location(id: str, version: str, uri: str, type: str, recipe: str | None) -> None:
     file = get_file_for_id(id)
     root = read_root(file)
 
@@ -307,7 +426,7 @@ def write_location(id, version, uri, type, recipe):
         write_root(file, root)
 
 
-def write_summary_namespace(id, uri, prefix):
+def write_summary_namespace(id: str, uri: str, prefix: str) -> None:
     file = get_file_for_id(id)
     root = read_root(file)
     vocab = grab_first(voc_root, root)
