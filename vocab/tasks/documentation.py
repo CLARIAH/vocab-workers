@@ -1,4 +1,5 @@
 import os
+import gzip
 import logging
 
 from itertools import chain
@@ -8,19 +9,19 @@ from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS, Graph
 from vocab.app import celery
 from vocab.util.rdf import load_cached_into_graph
 from vocab.cmdi import with_version_and_dump, write_location
-from vocab.config import vocab_registry_url, docs_path
+from vocab.config import vocab_static_url, docs_path
 
 log = logging.getLogger(__name__)
 
 
-def get_doc_path(id: str, version: str) -> str:
-    return os.path.join(docs_path, id, version + '.html')
+def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) -> str:
+    return os.path.join(id, version + '.html' + ('' if without_gz else '.gz'))
 
 
 @celery.task
 def create_documentation(id: str):
     for record, version, cached_version_path in with_version_and_dump(id):
-        if not os.path.exists(get_doc_path(id, version.version)):
+        if not os.path.exists(docs_path + get_relative_path_for_file(id, version.version)):
             log.info(f"No documentation found for {id} with version {version.version}, creating!")
             location = next((loc for loc in version.locations if loc.type == 'endpoint'), None)
             create_documentation_for_file(id, version.version, record.title, location.location, cached_version_path)
@@ -49,11 +50,14 @@ def create_documentation_for_file(id: str, version: str, title: str, uri: str, c
 
             od = OntPub(ontology=graph)
 
-        doc_path = get_doc_path(id, version)
+        doc_path = docs_path + get_relative_path_for_file(id, version)
         os.makedirs(os.path.dirname(doc_path), exist_ok=True)
-        od.make_html(destination=doc_path)
 
-        uri = vocab_registry_url + '/doc/' + id
+        html = od.make_html()
+        html = gzip.compress(bytes(html, 'utf-8'))
+        open(doc_path, 'wb').write(html)
+
+        uri = vocab_static_url + '/docs/' + get_relative_path_for_file(id, version, without_gz=True)
         write_location(id, version, uri, 'homepage', 'doc')
         log.info(f'Produced documentation for {id} with version {version}!')
     except Exception as e:

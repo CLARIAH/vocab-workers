@@ -1,3 +1,4 @@
+import bz2
 import os
 import re
 import gzip
@@ -9,7 +10,7 @@ from zipfile import ZipFile
 
 from vocab.app import celery
 from vocab.cmdi import with_version, write_location
-from vocab.config import cache_path, vocab_cache_url
+from vocab.config import cache_path, vocab_static_url
 from vocab.util.rdf import content_type_extensions
 from vocab.util.fs import get_cached_version
 
@@ -23,10 +24,13 @@ def get_relative_path_for_file(id: str, version: str, extension: str) -> str:
 @celery.task
 def cache_files(id: str) -> None:
     for record, version in with_version(id):
-        for location in version['locations']:
-            if location.type == 'endpoint' and get_cached_version(id, version.version) is None:
-                log.info(f"No cache found for {id}: {location.location}, creating!")
-                cache_for_file(location.location, id, version.version)
+        for location in version.locations:
+            if location.type == 'dump' and get_cached_version(id, version.version) is None:
+                try:
+                    log.info(f"No cache found for {id}: {location.location}, creating!")
+                    cache_for_file(location.location, id, version.version)
+                except Exception as e:
+                    log.error(f'Failed to cache for {id}: {location.location}: {e}')
 
 
 def cache_for_file(url: str, id: str, version: str) -> None:
@@ -48,6 +52,10 @@ def cache_for_file(url: str, id: str, version: str) -> None:
             with ZipFile(BytesIO(content)) as zip, zip.open(url_hash) as file:
                 content = file.read()
 
+        if file_extension == '.bz2':
+            file_name, file_extension = os.path.splitext(file_name)
+            content = bz2.decompress(content)
+
         if file_extension == '.gz':
             file_name, file_extension = os.path.splitext(file_name)
         else:
@@ -68,8 +76,8 @@ def cache_for_file(url: str, id: str, version: str) -> None:
             os.makedirs(os.path.dirname(cached_file_name), exist_ok=True)
             open(cached_file_name, 'wb').write(content)
 
-            uri = f'{vocab_cache_url}/{get_relative_path_for_file(id, version, file_extension)}'
-            write_location(id, version, uri, 'endpoint', 'cache')
+            uri = f'{vocab_static_url}/cache/{get_relative_path_for_file(id, version, file_extension)}'
+            write_location(id, version, uri, 'dump', 'cache')
 
             log.info(f"Cache created for {id} and version {version}!")
         else:

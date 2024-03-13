@@ -5,7 +5,7 @@ log_level = os.environ.get('LOG_LEVEL', 'INFO')
 concurrency = os.environ.get('CONCURRENCY', 10)
 
 vocab_registry_url = os.environ.get('VOCAB_REGISTRY_URL', 'https://localhost:5000')
-vocab_cache_url = os.environ.get('VOCAB_CACHE_URL', 'https://localhost:5000')
+vocab_static_url = os.environ.get('VOCAB_STATIC_URL', 'https://localhost:5000')
 sparql_url = os.environ.get('SPARQL_URL', 'https://localhost:5000')
 sparql_update_url = os.environ.get('SPARQL_UPDATE_URL', 'https://localhost:5000')
 summarizer_url = os.environ.get('SUMMARIZER_URL', 'https://api.zandbak.dans.knaw.nl/summarizer')

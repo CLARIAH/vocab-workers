@@ -14,7 +14,10 @@ log = logging.getLogger(__name__)
 @celery.task
 def load_into_sparql_store(id: str) -> None:
     for record, version, cached_version_path in with_version_and_dump(id):
-        load_into_sparql_store_for_file(id, version.version, cached_version_path)
+        try:
+            load_into_sparql_store_for_file(id, version.version, cached_version_path)
+        except Exception as e:
+            log.error(f'Failed to load data into SPARQL for {id} and version {version.version}: {e}')
 
 
 def load_into_sparql_store_for_file(id: str, version: str, cached_version_path: str) -> None:
