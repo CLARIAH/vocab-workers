@@ -14,7 +14,7 @@ LOCAL = Namespace('#')
 SKOSMOS = Namespace('http://purl.org/net/skosmos#')
 
 
-@celery.task
+@celery.task(name='rdf.skosmos')
 def add_to_skosmos_config(id: str):
     for record, version in with_version(id):
         # TODO: if record.type == 'skos':

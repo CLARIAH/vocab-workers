@@ -41,7 +41,7 @@ class Summary(BaseModel):
     objects: ObjectsSummaryPart = ObjectsSummaryPart()
 
 
-@celery.task
+@celery.task(name='rdf.summarizer')
 def summarizer(id: str) -> None:
     for record, version, cached_version_path in with_version_and_dump(id):
         try:

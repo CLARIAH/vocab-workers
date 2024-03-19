@@ -21,7 +21,7 @@ def get_relative_path_for_file(id: str, version: str, extension: str) -> str:
     return os.path.join(id, version + extension)
 
 
-@celery.task
+@celery.task(name='cache')
 def cache_files(id: str) -> None:
     for record, version in with_version(id):
         for location in version.locations:

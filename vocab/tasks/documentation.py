@@ -18,7 +18,7 @@ def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) 
     return os.path.join(id, version + '.html' + ('' if without_gz else '.gz'))
 
 
-@celery.task
+@celery.task(name='rdf.documentation')
 def create_documentation(id: str):
     for record, version, cached_version_path in with_version_and_dump(id):
         if not os.path.exists(docs_path + get_relative_path_for_file(id, version.version)):

@@ -21,7 +21,7 @@ celery = Celery(
 
 if __name__ == '__main__':
     if sys.argv[1] == 'flower':
-        celery.start(['flower'])
+        celery.start(['flower', '--persistent=True'])
     elif sys.argv[1] == 'worker':
         celery.worker_main([
             'worker',

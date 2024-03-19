@@ -11,7 +11,7 @@ from vocab.util.rdf import sparql_store, get_vocab_graph_uri, load_cached_into_g
 log = logging.getLogger(__name__)
 
 
-@celery.task
+@celery.task(name='rdf.sparql')
 def load_into_sparql_store(id: str) -> None:
     for record, version, cached_version_path in with_version_and_dump(id):
         try:

@@ -20,7 +20,7 @@ class MinimumVocabInfoLOV(BaseModel):
     uri: Optional[str] = None
 
 
-@celery.task
+@celery.task(name='rdf.lov')
 def lov(id):
     response = session.get(lov_api_url, params={'vocab': id})
     if response.status_code == requests.codes.ok:
