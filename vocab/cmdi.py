@@ -26,7 +26,7 @@ xpath_valid_from = "./cmd:validFrom"
 
 xpath_location_elem = "./cmd:Location"
 xpath_namespace_elem = "./cmd:Namespaces/cmd:Namespace"
-xpath_list_item_elem = "./cmd:List/cmd:Item"
+xpath_namespace_item_elem = "./cmd:NamespaceItems/cmd:NamespaceItem"
 xpath_summary_elem = "./cmd:Summary"
 
 xpath_summary_ns = "./cmd:Summary/cmd:Namespace"
@@ -146,7 +146,7 @@ def get_record(id: str) -> Vocab:
             prefix=grab_value(xpath_prefix, list_item_elem),
             name=grab_value(xpath_name, list_item_elem),
             count=grab_value(xpath_count, list_item_elem, int),
-        ) for list_item_elem in elementpath.select(elem, xpath_list_item_elem, ns)]
+        ) for list_item_elem in elementpath.select(elem, xpath_namespace_item_elem, ns)]
 
     def create_location_for(elem: Element) -> Location:
         return Location(
@@ -165,10 +165,7 @@ def get_record(id: str) -> Vocab:
             namespace=summary_namespace,
             stats=create_summary_for(grab_first(xpath_summary_elem, elem)),
             subjects=create_summary_for(grab_first(xpath_summary_st_subj, elem)),
-            predicates=SummaryListStats(
-                **create_summary_for(grab_first(xpath_summary_st_pred, elem)).model_dump(),
-                list=create_list_for(grab_first(xpath_summary_st_pred, elem)),
-            ),
+            predicates=create_summary_for(grab_first(xpath_summary_st_pred, elem)),
             objects=SummaryObjectStats(
                 **create_summary_for(grab_first(xpath_summary_st_obj, elem)).model_dump(),
                 classes=SummaryListStats(
@@ -264,6 +261,3 @@ def write_location(id: str, version: str, uri: str, type: str, recipe: str | Non
             recipe_elem.text = recipe
 
         write_root(file, root)
-
-
-
