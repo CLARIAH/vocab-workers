@@ -34,6 +34,7 @@ class ObjectsSummaryPart(SummaryPart):
 
 
 class Summary(BaseModel):
+    total: int = 0
     prefixes: dict[str, str] = {}
     stats: dict[str, int] = {}
     subjects: SummaryPart = SummaryPart()
@@ -52,10 +53,10 @@ def summarizer(id: str) -> None:
 
 
 def summarize(path: str) -> Summary:
-    def count_for(instance: Node, summary_part: SummaryPart) -> None:
-        if isinstance(instance, URIRef):
-            summary_part.count += 1
+    def count_for(instance: Node, summary_part: SummaryPart, distinct: set) -> None:
+        distinct.add(instance)
 
+        if isinstance(instance, URIRef):
             try:
                 prefix, namespace, name = graph.compute_qname(instance)
                 summary.stats[prefix] = summary.stats.get(prefix, 0) + 1
@@ -80,21 +81,29 @@ def summarize(path: str) -> Summary:
     summary = Summary(prefixes={prefix: str(namespace)
                                 for prefix, namespace in graph.namespaces()})
 
+    distinct = {"subjects": set(), "predicates": set(), "objects": set()}
+
     for s, p, o in graph:
-        count_for(s, summary.subjects)
-        count_for(p, summary.predicates)
-        count_for(o, summary.objects)
+        summary.total += 1
+
+        count_for(s, summary.subjects, distinct["subjects"])
+        count_for(p, summary.predicates, distinct["predicates"])
+        count_for(o, summary.objects, distinct["objects"])
 
         if isinstance(o, URIRef) and p == RDF.type:
             classes_count_for(o, summary.objects.classes)
 
         if isinstance(o, Literal):
-            datatype = o.datatype if o.datatype else XSD['langString'] if o.language else XSD.string
+            datatype = o.datatype if o.datatype else RDF.langString if o.language else XSD.string
             classes_count_for(datatype, summary.objects.literals)
 
             if o.language:
                 summary.objects.literals.languages[o.language] = \
                     summary.objects.literals.languages.get(o.language, 0) + 1
+
+    summary.subjects.count = len(distinct["subjects"])
+    summary.predicates.count = len(distinct["predicates"])
+    summary.objects.count = len(distinct["objects"])
 
     return summary
 
