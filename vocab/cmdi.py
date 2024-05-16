@@ -101,7 +101,7 @@ class Summary(BaseModel):
     namespace: Optional[Namespace] = None
     stats: Optional[SummaryStats] = None
     subjects: Optional[SummaryStats] = None
-    predicates: Optional[SummaryListStats] = None
+    predicates: Optional[SummaryStats] = None
     objects: Optional[SummaryObjectStats] = None
 
 

@@ -23,7 +23,7 @@ def create_documentation(id: str):
     for record, version, cached_version_path in with_version_and_dump(id):
         if not os.path.exists(docs_path + get_relative_path_for_file(id, version.version)):
             log.info(f"No documentation found for {id} with version {version.version}, creating!")
-            location = next((loc for loc in version.locations if loc.type == 'endpoint'), None)
+            location = next((loc for loc in version.locations if loc.type == 'dump'), None)
             create_documentation_for_file(id, version.version, record.title, location.location, cached_version_path)
 
 
