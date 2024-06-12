@@ -21,10 +21,14 @@ def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) 
 @celery.task(name='rdf.documentation')
 def create_documentation(id: str):
     for record, version, cached_version_path in with_version_and_dump(id):
-        if not os.path.exists(docs_path + get_relative_path_for_file(id, version.version)):
+        path = docs_path + get_relative_path_for_file(id, version.version)
+        if not os.path.exists(path):
             log.info(f"No documentation found for {id} with version {version.version}, creating!")
             location = next((loc for loc in version.locations if loc.type == 'dump'), None)
             create_documentation_for_file(id, version.version, record.title, location.location, cached_version_path)
+        else:
+            log.info(f"Write documentation location for {id} and version {version.version}")
+            write_docs_location(id, version.version)
 
 
 def create_documentation_for_file(id: str, version: str, title: str, uri: str, cached_version_path: str) -> None:
@@ -62,3 +66,8 @@ def create_documentation_for_file(id: str, version: str, title: str, uri: str, c
         log.info(f'Produced documentation for {id} with version {version}!')
     except Exception as e:
         log.error(f'Doc error for {id} with version {version}: {e}')
+
+
+def write_docs_location(id: str, version: str) -> None:
+    uri = vocab_static_url + '/docs/' + get_relative_path_for_file(id, version, without_gz=True)
+    write_location(id, version, uri, 'homepage', 'doc')

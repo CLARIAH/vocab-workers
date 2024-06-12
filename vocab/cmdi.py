@@ -43,7 +43,7 @@ xpath_summary_st_obj_literals_lang = "./cmd:Summary/cmd:Statements/cmd:Objects/c
 
 xpath_vocab_type = f"{voc_root}/cmd:type"
 xpath_title = f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],base-uri(/cmd:CMD)[normalize-space(.)!=''])[1]"
-xpath_description = f"{voc_root}/cmd:Description/cmd:description[@xml:lang='en']"
+xpath_description = f"{voc_root}/cmd:Description/cmd:description"
 xpath_license = f"{voc_root}/cmd:License/cmd:url"
 xpath_publisher = f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher"
 xpath_location = f"{voc_root}/cmd:Location"
@@ -68,7 +68,7 @@ class Recommendation(BaseModel):
 
 class Namespace(BaseModel):
     uri: str
-    prefix: str
+    prefix: Optional[str] = None
 
 
 class SummaryNamespaceStats(Namespace):

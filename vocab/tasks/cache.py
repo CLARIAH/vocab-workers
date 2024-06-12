@@ -25,12 +25,17 @@ def get_relative_path_for_file(id: str, version: str, extension: str) -> str:
 def cache_files(id: str) -> None:
     for record, version in with_version(id):
         for location in version.locations:
-            if location.type == 'dump' and get_cached_version(id, version.version) is None:
-                try:
-                    log.info(f"No cache found for {id}: {location.location}, creating!")
-                    cache_for_file(location.location, id, version.version)
-                except Exception as e:
-                    log.error(f'Failed to cache for {id}: {location.location}: {e}')
+            if location.type == 'dump':
+                cached_path = get_cached_version(id, version.version)
+                if cached_path is None:
+                    try:
+                        log.info(f"No cache found for {id}: {location.location}, creating!")
+                        cache_for_file(location.location, id, version.version)
+                    except Exception as e:
+                        log.error(f'Failed to cache for {id}: {location.location}: {e}')
+                else:
+                    log.info(f"Write cache location fo {id} and version {version.version}")
+                    write_cache_location(id, version.version, cached_path)
 
 
 def cache_for_file(url: str, id: str, version: str) -> None:
@@ -84,3 +89,9 @@ def cache_for_file(url: str, id: str, version: str) -> None:
             log.error(f"No file extension found for {id} and version {version}!")
     else:
         log.error(f"Failed to create cache for {id} and version {version}!")
+
+
+def write_cache_location(id: str, version: str, cached_path: str) -> None:
+    file_name, file_extension = os.path.splitext(cached_path[:-3])
+    uri = f'{vocab_static_url}/cache/{get_relative_path_for_file(id, version, file_extension)}'
+    write_location(id, version, uri, 'dump', 'cache')
