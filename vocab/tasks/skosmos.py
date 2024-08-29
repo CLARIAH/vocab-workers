@@ -5,7 +5,7 @@ from rdflib import Graph, Namespace, DC, VOID, RDF, Literal, URIRef
 
 from vocab.app import celery
 from vocab.cmdi import with_version, write_location
-from vocab.config import skosmos_config_path
+from vocab.config import root_path
 from vocab.util.lock import task_lock
 
 log = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def add_to_skosmos_config(id: str):
 
 @task_lock(main_key="update_skosmos_config")
 def update_skosmos_config_with(id, version, title):
-    config_file_path = os.path.join(skosmos_config_path, 'config.ttl')
+    config_file_path = os.path.join(root_path, 'config.ttl')
 
     graph = Graph()
     graph.parse(config_file_path)

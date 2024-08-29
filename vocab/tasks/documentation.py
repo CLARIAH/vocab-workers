@@ -9,7 +9,7 @@ from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS, Graph
 from vocab.app import celery
 from vocab.util.rdf import load_cached_into_graph
 from vocab.cmdi import with_version_and_dump, write_location
-from vocab.config import vocab_static_url, docs_path
+from vocab.config import vocab_static_url, root_path, docs_rel_path
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) 
 @celery.task(name='rdf.documentation')
 def create_documentation(id: str):
     for record, version, cached_version_path in with_version_and_dump(id):
-        path = docs_path + get_relative_path_for_file(id, version.version)
+        path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(id, version.version))
         if not os.path.exists(path):
             log.info(f"No documentation found for {id} with version {version.version}, creating!")
             location = next((loc for loc in version.locations if loc.type == 'dump'), None)
@@ -54,7 +54,7 @@ def create_documentation_for_file(id: str, version: str, title: str, uri: str, c
 
             od = OntPub(ontology=graph)
 
-        doc_path = docs_path + get_relative_path_for_file(id, version)
+        doc_path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(id, version))
         os.makedirs(os.path.dirname(doc_path), exist_ok=True)
 
         html = od.make_html()

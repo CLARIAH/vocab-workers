@@ -6,7 +6,7 @@ from lxml import etree
 from lxml.etree import Element
 from inspect import cleandoc
 
-from vocab.config import records_path
+from vocab.config import root_path, records_rel_path
 
 ns = {"cmd": "http://www.clarin.eu/cmd/"}
 ns_prefix = '{http://www.clarin.eu/cmd/}'
@@ -14,7 +14,7 @@ voc_root = './cmd:Components/cmd:Vocabulary'
 
 
 def get_file_for_id(id: str) -> str:
-    return os.path.join(records_path, id + '.cmdi')
+    return str(os.path.join(root_path, records_rel_path, id + '.cmdi'))
 
 
 def read_root(file: str) -> Element:

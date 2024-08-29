@@ -1,0 +1,150 @@
+{
+  "@version": 1.1,
+  "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+  "xsd": "http://www.w3.org/2001/XMLSchema#",
+  "dcat": "http://www.w3.org/ns/dcat#",
+  "dcterms": "http://purl.org/dc/terms/",
+  "xtypes": "http://purl.org/xtypes/",
+  "schema": "https://schema.org/",
+  "void": "http://rdfs.org/ns/void#",
+  "vocab": "https://registry.vocabs.dev.clariah.nl/vocab/",
+  "Dataset": "dcat:Dataset",
+  "VoidDataset": "void:Dataset",
+  "identifier": "dcterms:identifier",
+  "title": {
+    "@id": "dcterms:title",
+    "@language": "en"
+  },
+  "conformsTo": {
+    "@id": "dcterms:conformsTo",
+    "@type": "@id"
+  },
+  "license": {
+    "@id": "dcterms:license",
+    "@type": "@id"
+  },
+  "homepage": {
+    "@id": "dcat:landingPage",
+    "@type": "@id"
+  },
+  "descriptions": "@nest",
+  "plain": {
+    "@id": "dcterms:description",
+    "@nest": "descriptions",
+    "@language": "en"
+  },
+  "md": {
+    "@id": "dcterms:description",
+    "@type": "xtypes:Fragment-Markdown",
+    "@nest": "descriptions"
+  },
+  "issued": {
+    "@id": "dcterms:issued",
+    "@type": "xsd:date"
+  },
+  "modified": {
+    "@id": "dcterms:modified",
+    "@type": "xsd:date"
+  },
+  "publishers": {
+    "@id": "dcterms:publisher",
+    "@type": "@id",
+    "@container": "@set"
+  },
+  "reviews": {
+    "@id": "schema:review",
+    "@type": "@id",
+    "@container": "@set",
+    "@context": {
+      "itemReviewed": "schema:itemReviewed",
+      "body": "schema:reviewBody",
+      "rating": "schema:reviewRating"
+    }
+  },
+  "versions": {
+    "@id": "dcterms:hasVersion",
+    "@type": "@id",
+    "@container": "@set",
+    "@context": {
+      "title": "dcterms:title",
+      "versionOf": {
+        "@id": "dcat:isVersionOf",
+        "@type": "@id"
+      },
+      "version": "dcat:version",
+      "distributions": {
+        "@id": "dcat:distribution",
+        "@type": "@id",
+        "@container": "@set",
+        "@context": {
+          "Distribution": "dcat:Distribution",
+          "url": {
+            "@id": "dcat:downloadURL",
+            "@type": "@id"
+          }
+        }
+      },
+      "accessServices": {
+        "@id": "dcat:accessService",
+        "@type": "@id",
+        "@container": "@set",
+        "@context": {
+          "DataService": "dcat:DataService",
+          "url": {
+            "@id": "dcat:accessURL",
+            "@type": "@id"
+          }
+        }
+      },
+      "summary": {
+        "@reverse": "dcterms:isPartOf",
+        "@context": {
+          "isSummaryOf": {
+            "@id": "dcterms:isPartOf",
+            "@type": "@id"
+          },
+          "vocabularies": {
+            "@id": "void:vocabulary",
+            "@type": "@id",
+            "@container": "@set"
+          },
+          "prefixes": {
+            "@id": "vocab:vocabulary",
+            "@container": "@index",
+            "@index": "prefix"
+          },
+          "prefix": {
+            "@id": "vocab:prefix"
+          },
+          "uri": {
+            "@id": "vocab:uri",
+            "@type": "@id"
+          },
+          "triples": "void:triples",
+          "properties": "void:properties",
+          "entities": "void:entities",
+          "distinctSubjects": "void:distinctSubjects",
+          "distinctObjects": "void:distinctObjects",
+          "distinctOccurrences": "vocab:distinctOccurrences",
+          "literalCount": "vocab:literals",
+          "name": "vocab:name",
+          "language": "vocab:language",
+          "class": {
+            "@id": "void:class",
+            "@type": "@id"
+          },
+          "classes": {
+            "@id": "void:classPartition",
+            "@container": "@index",
+            "@index": "name"
+          },
+          "literals": {
+            "@id": "vocab:literalPartition",
+            "@container": "@index",
+            "@index": "name"
+          }
+        }
+      }
+    }
+  }
+}

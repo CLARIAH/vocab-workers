@@ -19,6 +19,9 @@ elementpath = "^4.4.0"
 pylode = "^3.2.0"
 rdflib = "^7.0.0"
 pydantic = "^2.8.2"
+beautifulsoup4 = "^4.12.3"
+markdown = "^3.7"
+pyld = "^2.0.4"
 
 
 [build-system]

@@ -10,6 +10,7 @@ celery = Celery(
     include=[
         'vocab.tasks.cache',
         'vocab.tasks.documentation',
+        'vocab.tasks.jsonld',
         'vocab.tasks.lov',
         'vocab.tasks.skosmos',
         'vocab.tasks.sparql',

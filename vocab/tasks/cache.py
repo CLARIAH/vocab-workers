@@ -10,7 +10,7 @@ from zipfile import ZipFile
 
 from vocab.app import celery
 from vocab.cmdi import with_version, write_location
-from vocab.config import cache_path, vocab_static_url
+from vocab.config import root_path, cache_rel_path, vocab_static_url
 from vocab.util.rdf import content_type_extensions
 from vocab.util.fs import get_cached_version
 
@@ -77,7 +77,7 @@ def cache_for_file(url: str, id: str, version: str) -> None:
                 log.warning(f"No file extension, but we have a content type for {id}: {content_type}!")
 
         if file_extension:
-            cached_file_name = cache_path + get_relative_path_for_file(id, version, file_extension) + '.gz'
+            cached_file_name = os.path.join(root_path, cache_rel_path, get_relative_path_for_file(id, version, file_extension) + '.gz')
             os.makedirs(os.path.dirname(cached_file_name), exist_ok=True)
             open(cached_file_name, 'wb').write(content)
 

@@ -1,11 +1,10 @@
 import os
-import re
 
-from vocab.config import cache_path
+from vocab.config import root_path, cache_rel_path
 
 
 def get_cached_version(id: str, version: str) -> str | None:
-    folder = os.path.join(cache_path, id)
+    folder = str(os.path.join(root_path, cache_rel_path, id))
     if os.path.exists(folder):
         for filename in os.listdir(folder):
             if filename.startswith(version):

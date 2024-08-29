@@ -4,9 +4,9 @@ import elementpath
 
 from lxml import etree
 from lxml.etree import Element
-from datetime import datetime
 from pydantic import BaseModel
-from typing import Any, Optional, List, Generator, Tuple
+from datetime import datetime, UTC
+from typing import Optional, List, Generator, Tuple
 
 from vocab.util.fs import get_cached_version
 from vocab.util.xml import ns, ns_prefix, voc_root, grab_value, grab_first, read_root, write_root, get_file_for_id
@@ -25,6 +25,12 @@ xpath_version_no = "./cmd:version"
 xpath_valid_from = "./cmd:validFrom"
 
 xpath_location_elem = "./cmd:Location"
+xpath_review_elem = "./cmd:body"
+xpath_review_author_elem = "./cmd:author"
+xpath_review_status_elem = "./cmd:status"
+xpath_rating_elem = "./cmd:rating"
+xpath_like_elem = "./cmd:like"
+xpath_dislike_elem = "./cmd:dislike"
 xpath_namespace_elem = "./cmd:Namespaces/cmd:Namespace"
 xpath_namespace_item_elem = "./cmd:NamespaceItems/cmd:NamespaceItem"
 xpath_summary_elem = "./cmd:Summary"
@@ -46,8 +52,10 @@ xpath_title = f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],ba
 xpath_description = f"{voc_root}/cmd:Description/cmd:description"
 xpath_license = f"{voc_root}/cmd:License/cmd:url"
 xpath_publisher = f"{voc_root}/cmd:Assessement/cmd:Recommendation/cmd:Publisher"
+xpath_review = f"{voc_root}/cmd:Assessement/cmd:Review"
 xpath_location = f"{voc_root}/cmd:Location"
 xpath_version = f"{voc_root}/cmd:Version"
+xpath_assessment = f"{voc_root}/cmd:Assessement"
 
 
 class Location(BaseModel):
@@ -66,13 +74,21 @@ class Recommendation(BaseModel):
     rating: Optional[str] = None
 
 
+class Review(BaseModel):
+    id: int
+    review: str
+    rating: int
+    likes: int
+    dislikes: int
+
+
 class Namespace(BaseModel):
     uri: str
     prefix: Optional[str] = None
 
 
 class SummaryNamespaceStats(Namespace):
-    count: Optional[int] = None
+    count: Optional[int] = 0
 
 
 class SummaryNamespaceNameStats(SummaryNamespaceStats):
@@ -80,7 +96,7 @@ class SummaryNamespaceNameStats(SummaryNamespaceStats):
 
 
 class SummaryStats(BaseModel):
-    count: Optional[int] = None
+    count: Optional[int] = 0
     stats: List[SummaryNamespaceStats]
 
 
@@ -118,12 +134,10 @@ class Vocab(BaseModel):
     title: str
     description: str
     license: str
-    versioningPolicy: Optional[str] = None
-    sustainabilityPolicy: Optional[str] = None
     created: datetime
     modified: datetime
     locations: List[Location]
-    reviews: List[Any] = []
+    reviews: List[Review] = []
     usage: Usage
     recommendations: List[Recommendation]
     versions: List[Version]
@@ -153,6 +167,15 @@ def get_record(id: str) -> Vocab:
             location=grab_value(xpath_uri, elem),
             type=grab_value(xpath_type, elem),
             recipe=grab_value(xpath_recipe, elem),
+        )
+
+    def create_review_for(id: int, elem: Element) -> Review:
+        return Review(
+            id=id,
+            review=grab_value(xpath_review_elem, elem),
+            rating=grab_value(xpath_rating_elem, elem),
+            likes=len(elementpath.select(elem, xpath_like_elem, ns)),
+            dislikes=len(elementpath.select(elem, xpath_dislike_elem, ns))
         )
 
     def create_version(elem: Element) -> Version:
@@ -202,13 +225,13 @@ def get_record(id: str) -> Vocab:
             title=grab_value(xpath_title, root),
             description=grab_value(xpath_description, root),
             license=grab_value(xpath_license, root) or 'http://rightsstatements.org/vocab/UND/1.0/',
-            versioningPolicy=None,
-            sustainabilityPolicy=None,
-            created=datetime.utcfromtimestamp(os.path.getctime(file)).isoformat(),
-            modified=datetime.utcfromtimestamp(os.path.getmtime(file)).isoformat(),
+            created=datetime.fromtimestamp(os.path.getctime(file), UTC).isoformat(),
+            modified=datetime.fromtimestamp(os.path.getmtime(file), UTC).isoformat(),
             locations=[create_location_for(elem)
                        for elem in elementpath.select(root, xpath_location, ns)],
-            reviews=[],
+            reviews=[create_review_for(i + 1, elem)
+                     for i, elem in enumerate(elementpath.select(root, xpath_review, ns))
+                     if grab_value(xpath_review_status_elem, elem) == 'published'],
             usage=Usage(count=0, outOf=0),
             recommendations=[Recommendation(publisher=grab_value(xpath_name, elem), rating=None)
                              for elem in elementpath.select(root, xpath_publisher, ns)],
