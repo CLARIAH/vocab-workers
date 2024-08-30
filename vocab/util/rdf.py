@@ -41,10 +41,6 @@ def get_sparql_store(context_aware: bool = True) -> SPARQLUpdateStore:
                              node_to_sparql=encode_bnode_to_sparql, context_aware=context_aware)
 
 
-def get_vocab_graph_uri(id: str, version: str) -> URIRef:
-    return URIRef('urn:vocab:' + id + '@' + version)
-
-
 def load_cached_into_graph(graph: Graph, cached_version_path: str, use_batch: bool = False) -> None:
     memory_graph = Graph() if use_batch else None
 

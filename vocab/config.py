@@ -14,3 +14,5 @@ records_rel_path = os.environ.get('RECORDS_REL_PATH', 'records')
 jsonld_rel_path = os.environ.get('JSONLD_REL_PATH', 'jsonld')
 docs_rel_path = os.environ.get('DOCS_REL_PATH', 'docs')
 cache_rel_path = os.environ.get('CACHE_REL_PATH', 'cache')
+
+vocab_namespace = os.environ.get('VOCAB_NS', 'https://registry.vocabs.dev.clariah.nl/vocab/')
