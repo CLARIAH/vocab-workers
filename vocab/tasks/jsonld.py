@@ -11,6 +11,7 @@ from rdflib import Namespace, Graph, DCAT, DCTERMS, SDO, VOID, RDF, Literal, URI
 from vocab.app import celery
 from vocab.cmdi import get_record, Vocab, Version, Review
 from vocab.config import root_path, jsonld_rel_path
+from vocab.util.rdf import get_sparql_store
 
 VOCAB = Namespace('https://registry.vocabs.dev.clariah.nl/vocab/')
 XTYPES = Namespace('http://purl.org/xtypes/')
@@ -53,18 +54,33 @@ PUBLISHER = {
 @celery.task(name='jsonld')
 def create_jsonld(id: str) -> None:
     record = get_record(id)
-    graph = init_graph()
+    current_graph = get_current_jsonld(id)
 
-    create_rdf_in_graph(record, graph)
+    new_graph = init_graph()
+    create_rdf_in_graph(record, new_graph)
 
-    jsonld_output = json.loads(graph.serialize(format='json-ld', context=CONTEXT))
+    replace_in_sparql_store(current_graph, new_graph)
+
+    jsonld_output = json.loads(new_graph.serialize(format='json-ld', context=CONTEXT))
     jsonld_framed = jsonld.frame(jsonld_output, FRAME)
     del jsonld_framed['@context']
 
     jsonld_data = json.dumps(jsonld_framed, indent=4)
     jsonld_data = bytes(jsonld_data, 'utf-8')
     jsonld_data = gzip.compress(jsonld_data)
-    open(os.path.join(root_path, jsonld_rel_path, id + '.json.gz'), 'wb').write(jsonld_data)
+    open(os.path.join(root_path, jsonld_rel_path, id + '.jsonld.gz'), 'wb').write(jsonld_data)
+
+
+def get_current_jsonld(id: str) -> Graph | None:
+    jsonld_file = os.path.join(root_path, jsonld_rel_path, id + '.json.gz')
+    if os.path.exists(jsonld_file):
+        graph = Graph(bind_namespaces='core')
+        with gzip.open(jsonld_file, 'r') as jsonld_data:
+            graph.parse(jsonld_data.read(), format='json-ld', context=CONTEXT)
+
+        return graph
+
+    return None
 
 
 def init_graph() -> Graph:
@@ -226,3 +242,17 @@ def create_version_summary_rdf_in_graph(cmdi: Vocab, version_uri: URIRef, versio
         graph.add((summary_uri, VOCAB['languages'], languages))
         graph.add((languages, VOCAB['language'], Literal(lang)))
         graph.add((languages, VOID.triples, Literal(count)))
+
+
+def replace_in_sparql_store(old_graph: Graph | None, new_graph: Graph):
+    sparql_store = get_sparql_store(False)
+    graph = Graph(store=sparql_store)
+    nts = sparql_store.node_to_sparql
+
+    if old_graph:
+        for (s, p, o) in old_graph:
+            graph.update("DELETE { %s %s %s . } WHERE { %s %s %s . }" %
+                         (nts(s), nts(p), nts(o), nts(s), nts(p), nts(o)))
+
+    sparql_add = ["%s %s %s ." % (nts(s), nts(p), nts(o)) for (s, p, o) in new_graph]
+    graph.update("INSERT DATA { %s }" % '\n'.join(sparql_add))

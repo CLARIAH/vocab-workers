@@ -36,8 +36,9 @@ def encode_bnode_to_sparql(node: Node | str) -> str:
     return _node_to_sparql(node)
 
 
-sparql_store = SPARQLUpdateStore(query_endpoint=sparql_url, update_endpoint=sparql_update_url,
-                                 node_to_sparql=encode_bnode_to_sparql)
+def get_sparql_store(context_aware: bool = True) -> SPARQLUpdateStore:
+    return SPARQLUpdateStore(query_endpoint=sparql_url, update_endpoint=sparql_update_url,
+                             node_to_sparql=encode_bnode_to_sparql, context_aware=context_aware)
 
 
 def get_vocab_graph_uri(id: str, version: str) -> URIRef:
