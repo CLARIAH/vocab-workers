@@ -80,15 +80,12 @@ def get_bartoc_url(uri):
     return vocab_url
 
 # MATCHING
-bartoc_suggested_uris = []
-bartoc_urls = []
 dictionary_test = get_cmdi_namespaces(records_directory)
 for key in dictionary_test.keys():
-    bartoc_uri = suggest_bartoc_uri(key)
-    bartoc_suggested_uris.extend(bartoc_uri)
+    bartoc_suggested_uris = suggest_bartoc_uri(key)
 # print(bartoc_suggested_uris)
     for uri in bartoc_suggested_uris:
         bartoc_url = get_bartoc_url(uri)
         if dictionary_test[key] == bartoc_url:
-            print(f'URI = {uri}\n Publisher = https://bartoc.org \n Name = BARTOC')
-
+            print(f'URL = {bartoc_url}\n URI = {uri}\n Publisher = https://bartoc.org \n Name = BARTOC')
+            break
