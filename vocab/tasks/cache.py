@@ -1,6 +1,6 @@
-import bz2
 import os
 import re
+import bz2
 import gzip
 import logging
 import requests

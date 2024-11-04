@@ -115,13 +115,13 @@ def create_rdf_in_graph(cmdi: Vocab, graph: Graph) -> None:
         graph.add((uri, DCTERMS.description, Literal(description_text, lang='en')))
         graph.add((uri, DCTERMS.description, Literal(cmdi.description, datatype=XTYPES['Fragment-Markdown'])))
 
-    graph.add((uri, DCTERMS.license, URIRef(cmdi.license)))
+    graph.add((uri, DCTERMS.license, URIRef(cmdi.license.uri)))
 
-    graph.add((uri, DCTERMS.issued, Literal(cmdi.created, datatype=XSD.date)))
-    graph.add((uri, DCTERMS.modified, Literal(cmdi.modified, datatype=XSD.date)))
+    # graph.add((uri, DCTERMS.issued, Literal(cmdi.created, datatype=XSD.date)))
+    # graph.add((uri, DCTERMS.modified, Literal(cmdi.modified, datatype=XSD.date)))
 
-    for rec in cmdi.recommendations:
-        graph.add((uri, DCTERMS.publisher, URIRef(PUBLISHER[rec.publisher.lower()])))
+    for publisher in cmdi.publishers:
+        graph.add((uri, DCTERMS.publisher, URIRef(PUBLISHER[publisher.uri.lower()])))
 
     for review in cmdi.reviews:
         create_review_rdf_in_graph(cmdi, uri, review, graph)
