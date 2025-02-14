@@ -1,3 +1,4 @@
+import sys
 import logging
 import requests
 
@@ -6,8 +7,10 @@ from typing import Optional
 from pydantic import BaseModel
 
 from vocab.app import celery
+from vocab.cmdi import get_record, cmdi_from_redis
 from vocab.util.http import session
-from vocab.util.xml import read_root, grab_first, voc_root, ns_prefix, ns, write_root, get_file_for_id
+from vocab.util.file import run_work_for_file
+from vocab.util.xml import grab_first, ns_prefix, ns
 
 log = logging.getLogger(__name__)
 lov_api_url = 'https://lov.linkeddata.es/dataset/lov/api/v2/vocabulary/info'
@@ -20,41 +23,40 @@ class MinimumVocabInfoLOV(BaseModel):
     uri: Optional[str] = None
 
 
-@celery.task(name='rdf.lov')
-def lov(id):
-    response = session.get(lov_api_url, params={'vocab': id})
+@celery.task(name='rdf.lov', autoretry_for=(Exception,),
+             default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
+def lov(nr: int, id: int) -> None:
+    record = get_record(nr, id)
+    response = session.get(lov_api_url, params={'vocab': record.identifier})
     if response.status_code == requests.codes.ok:
         data = MinimumVocabInfoLOV.model_validate(response.json())
-        log.info(f'Work wit vocab {id} results: {data}')
+        log.info(f'Work wit vocab {record.identifier} results: {data}')
 
         if data.uri and data.prefix:
-            write_summary_namespace(id, data.uri, data.prefix)
+            write_namespace(nr, id, data.uri, data.prefix)
     else:
-        log.info(f'No vocab {id} results!')
+        log.info(f'No vocab {record.identifier} results!')
 
 
-def write_summary_namespace(id: str, uri: str, prefix: str) -> None:
-    file = get_file_for_id(id)
-    root = read_root(file)
-    vocab = grab_first(voc_root, root)
+def write_namespace(nr: int, id: int, uri: str, prefix: str) -> None:
+    with cmdi_from_redis(nr, id) as vocab:
+        namespace = grab_first("./cmd:Identification/cmd:Namespace", vocab)
+        if namespace is None:
+            identification = grab_first("./cmd:Identification", vocab)
+            namespace = etree.SubElement(identification, f"{ns_prefix}Namespace", nsmap=ns)
 
-    summary = grab_first("./cmd:Summary", vocab)
-    if summary is None:
-        summary = etree.SubElement(vocab, f"{ns_prefix}Summary", nsmap=ns)
+        uri_elem = grab_first("./cmd:uri", namespace)
+        if uri_elem is None:
+            uri_elem = etree.SubElement(namespace, f"{ns_prefix}uri", nsmap=ns)
 
-    namespace = grab_first("./cmd:Namespace", summary)
-    if namespace is None:
-        namespace = etree.SubElement(summary, f"{ns_prefix}Namespace", nsmap=ns)
+        prefix_elem = grab_first("./cmd:prefix", namespace)
+        if prefix_elem is None:
+            prefix_elem = etree.SubElement(namespace, f"{ns_prefix}prefix", nsmap=ns)
 
-    uri_elem = grab_first("./cmd:URI", namespace)
-    if uri_elem is None:
-        uri_elem = etree.SubElement(namespace, f"{ns_prefix}URI", nsmap=ns)
+        uri_elem.text = uri
+        prefix_elem.text = prefix
 
-    prefix_elem = grab_first("./cmd:prefix", namespace)
-    if prefix_elem is None:
-        prefix_elem = etree.SubElement(namespace, f"{ns_prefix}prefix", nsmap=ns)
 
-    uri_elem.text = uri
-    prefix_elem.text = prefix
-
-    write_root(file, root)
+if __name__ == '__main__':
+    with run_work_for_file(sys.argv[1]) as (nr, id):
+        lov(nr, id)

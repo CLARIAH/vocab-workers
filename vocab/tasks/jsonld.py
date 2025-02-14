@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import gzip
 
@@ -12,6 +13,7 @@ from vocab.app import celery
 from vocab.cmdi import get_record, Vocab, Version, Review
 from vocab.config import root_path, jsonld_rel_path, vocab_namespace
 from vocab.util.rdf import get_sparql_store
+from vocab.util.file import run_work_for_file
 
 VOCAB = Namespace(vocab_namespace)
 XTYPES = Namespace('http://purl.org/xtypes/')
@@ -51,10 +53,11 @@ PUBLISHER = {
 }
 
 
-@celery.task(name='jsonld')
-def create_jsonld(id: str) -> None:
-    record = get_record(id)
-    current_graph = get_current_jsonld(id)
+@celery.task(name='jsonld', autoretry_for=(Exception,),
+             default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
+def create_jsonld(nr: int, id: int) -> None:
+    record = get_record(nr, id)
+    current_graph = get_current_jsonld(record.identifier)
 
     new_graph = init_graph()
     create_rdf_in_graph(record, new_graph)
@@ -68,7 +71,7 @@ def create_jsonld(id: str) -> None:
     jsonld_data = json.dumps(jsonld_framed, indent=4)
     jsonld_data = bytes(jsonld_data, 'utf-8')
     jsonld_data = gzip.compress(jsonld_data)
-    open(os.path.join(root_path, jsonld_rel_path, id + '.jsonld.gz'), 'wb').write(jsonld_data)
+    open(os.path.join(root_path, jsonld_rel_path, record.identifier + '.jsonld.gz'), 'wb').write(jsonld_data)
 
 
 def get_current_jsonld(id: str) -> Graph | None:
@@ -256,3 +259,8 @@ def replace_in_sparql_store(old_graph: Graph | None, new_graph: Graph):
 
     sparql_add = ["%s %s %s ." % (nts(s), nts(p), nts(o)) for (s, p, o) in new_graph]
     graph.update("INSERT DATA { %s }" % '\n'.join(sparql_add))
+
+
+if __name__ == '__main__':
+    with run_work_for_file(sys.argv[1]) as (nr, id):
+        create_jsonld(nr, id)

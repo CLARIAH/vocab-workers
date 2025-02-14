@@ -1,13 +1,17 @@
 import logging
+from contextlib import contextmanager
+
 import elementpath
 
 from lxml import etree
 from lxml.etree import Element
+from datetime import datetime
 from pydantic import BaseModel
-from typing import Optional, List, Generator, Tuple
+from typing import Optional, List, Generator, Tuple, Any
 
 from vocab.util.fs import get_cached_version
-from vocab.util.xml import ns, ns_prefix, voc_root, grab_value, grab_first, read_root, write_root, get_file_for_id
+from vocab.util.redis import get_object_redis, store_object_redis
+from vocab.util.xml import ns, ns_prefix, voc_root, grab_value, grab_first, read_xml, write_xml
 
 log = logging.getLogger(__name__)
 
@@ -19,14 +23,16 @@ xpath_type = "./cmd:type"
 xpath_recipe = "./cmd:recipe"
 xpath_URI = "./cmd:URI"
 xpath_uri = "./cmd:uri"
+xpath_label = "./cmd:label"
+xpath_title = "./cmd:title"
+xpath_url = "./cmd:url"
+xpath_landing_page = "./cmd:landingPage"
 xpath_prefix = "./cmd:prefix"
-xpath_unesco = "./cmd:unesco"
-xpath_nwo = "./cmd:nwo"
-xpath_tag = "./cmd:tag"
 xpath_version_no = "./cmd:version"
 xpath_valid_from = "./cmd:validFrom"
 xpath_body = "./cmd:body"
 xpath_author = "./cmd:author"
+xpath_published = "./cmd:published"
 xpath_status = "./cmd:status"
 xpath_rating = "./cmd:rating"
 xpath_like = "./cmd:like"
@@ -49,23 +55,41 @@ xpath_summary_st_obj_classes = "./cmd:Summary/cmd:Statements/cmd:Objects/cmd:Cla
 xpath_summary_st_obj_literals = "./cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals"
 xpath_summary_st_obj_literals_lang = "./cmd:Summary/cmd:Statements/cmd:Objects/cmd:Literals/cmd:Languages/cmd:Language"
 
-xpath_title = f"({voc_root}/cmd:title[@xml:lang='en'][normalize-space(.)!=''],base-uri(/cmd:CMD)[normalize-space(.)!=''])[1]"
-xpath_description = f"{voc_root}/cmd:description[@xml:lang='en']"
-
+xpath_identification_identifier = f"{voc_root}/cmd:Identification/cmd:identifier"
+xpath_identification_title = f"{voc_root}/cmd:Identification/cmd:title"
+xpath_identification_namespace = f"{voc_root}/cmd:Identification/cmd:Namespace"
+xpath_responsibility_creators = f"{voc_root}/cmd:Responsibility/cmd:Creator"
+xpath_responsibility_maintainers = f"{voc_root}/cmd:Responsibility/cmd:Maintainer"
+xpath_responsibility_contributors = f"{voc_root}/cmd:Responsibility/cmd:Contributor"
+xpath_description_description = f"{voc_root}/cmd:Description/cmd:description"
+xpath_description_date_issued = f"{voc_root}/cmd:Description/cmd:dateIssued"
+xpath_description_languages = f"{voc_root}/cmd:Description/cmd:language"
+xpath_description_topic_unesco = f"{voc_root}/cmd:Description/cmd:topicUnesco"
+xpath_description_topic_nwo = f"{voc_root}/cmd:Description/cmd:topicNwo"
+xpath_description_keywords = f"{voc_root}/cmd:Description/cmd:Keywords"
+xpath_licenses = f"{voc_root}/cmd:License"
+xpath_is_referenced_by_registries = f"{voc_root}/cmd:IsReferencedBy/cmd:Registry"
+xpath_locations = f"{voc_root}/cmd:Location"
+xpath_version = f"{voc_root}/cmd:Version"
+xpath_review = f"{voc_root}/cmd:Review"
 xpath_type_syntax = f"{voc_root}/cmd:Type/cmd:syntax"
 xpath_type_kos = f"{voc_root}/cmd:Type/cmd:kos"
 xpath_type_entity = f"{voc_root}/cmd:Type/cmd:entity"
-
 xpath_license_uri = f"{voc_root}/cmd:License/cmd:uri"
 xpath_license_label = f"{voc_root}/cmd:License/cmd:label"
-
 xpath_topic_domain = f"{voc_root}/cmd:Topic/cmd:Domain"
 xpath_topic_tag = f"{voc_root}/cmd:Topic/cmd:Tag"
 xpath_publisher = f"{voc_root}/cmd:Publisher"
-xpath_root_namespace = f"{voc_root}/cmd:Namespace"
-xpath_root_location = f"{voc_root}/cmd:Location"
-xpath_review = f"{voc_root}/cmd:Review"
-xpath_version = f"{voc_root}/cmd:Version"
+
+
+class Authority(BaseModel):
+    uri: str
+    label: str
+
+
+class RelaxingAuthority(BaseModel):
+    uri: Optional[str] = None
+    label: str
 
 
 class Type(BaseModel):
@@ -74,9 +98,15 @@ class Type(BaseModel):
     entity: Optional[str] = None
 
 
-class License(BaseModel):
-    uri: str
-    label: str
+class Registry(BaseModel):
+    title: str
+    url: str
+    landing_page: Optional[str] = None
+
+
+class Topic(BaseModel):
+    unesco: Optional[str] = None
+    nwo: Optional[str] = None
 
 
 class Location(BaseModel):
@@ -90,33 +120,15 @@ class Namespace(BaseModel):
     prefix: Optional[str] = None
 
 
-class Domain(BaseModel):
-    unesco: Optional[str] = None
-    nwo: Optional[str] = None
-
-
-class Tag(BaseModel):
-    tag: str
-    uri: Optional[str] = None
-
-
-class Topic(BaseModel):
-    domain: Optional[Domain] = None
-    tags: List[Tag] = []
-
-
 class Review(BaseModel):
     id: int
-    review: str
+    status: str
+    author: str
+    published: datetime
+    body: str
     rating: int
-    likes: int
-    dislikes: int
-
-
-class Publisher(BaseModel):
-    identifier: str
-    name: str
-    uri: str
+    likes: List[str] = []
+    dislikes: List[str] = []
 
 
 class SummaryNamespaceStats(Namespace):
@@ -160,24 +172,43 @@ class Version(BaseModel):
 
 
 class Vocab(BaseModel):
-    id: str
+    identifier: str
     title: str
-    description: str
-    type: Type
-    license: License
-    locations: List[Location]
     namespace: Optional[Namespace] = None
+    creators: List[Authority] = []
+    maintainers: List[Authority] = []
+    contributors: List[Authority] = []
+    description: str
+    date_issued: Optional[datetime] = None
+    languages: List[str] = []
     topic: Optional[Topic] = None
-    reviews: List[Review] = []
-    publishers: List[Publisher] = []
+    keywords: List[RelaxingAuthority] = []
+    type: Type
+    licenses: List[RelaxingAuthority] = []
+    registries: List[Registry] = []
+    locations: List[Location]
     versions: List[Version]
+    reviews: List[Review] = []
 
 
-def get_record(id: str) -> Vocab:
-    def create_tag_for(elem: Element) -> Tag:
-        return Tag(
-            tag=grab_value(xpath_tag, elem),
+def get_record(nr: int, id: int) -> Vocab:
+    def create_authority_for(elem: Element) -> Authority:
+        return Authority(
             uri=grab_value(xpath_uri, elem),
+            label=grab_value(xpath_label, elem),
+        )
+
+    def create_relaxing_authority_for(elem: Element) -> RelaxingAuthority:
+        return RelaxingAuthority(
+            uri=grab_value(xpath_uri, elem),
+            label=grab_value(xpath_label, elem),
+        )
+
+    def create_registry_for(elem: Element) -> Registry:
+        return Registry(
+            title=grab_value(xpath_title, elem),
+            url=grab_value(xpath_url, elem),
+            landing_page=grab_value(xpath_landing_page, elem),
         )
 
     def create_summary_for(elem: Element) -> SummaryStats:
@@ -203,22 +234,6 @@ def get_record(id: str) -> Vocab:
             location=grab_value(xpath_uri, elem),
             type=grab_value(xpath_type, elem),
             recipe=grab_value(xpath_recipe, elem),
-        )
-
-    def create_publisher_for(elem: Element) -> Publisher:
-        return Publisher(
-            identifier=grab_value(xpath_identifier, elem),
-            name=grab_value(xpath_name, elem),
-            uri=grab_value(xpath_uri, elem),
-        )
-
-    def create_review_for(id: int, elem: Element) -> Review:
-        return Review(
-            id=id,
-            review=grab_value(xpath_body, elem),
-            rating=grab_value(xpath_rating, elem),
-            likes=len(elementpath.select(elem, xpath_like, ns)),
-            dislikes=len(elementpath.select(elem, xpath_dislike, ns))
         )
 
     def create_version(elem: Element) -> Version:
@@ -251,45 +266,63 @@ def get_record(id: str) -> Vocab:
             summary=summary
         )
 
-    file = get_file_for_id(id)
-    root = read_root(file)
+    def create_review_for(id: int, elem: Element) -> Review:
+        return Review(
+            id=id,
+            status=grab_value(xpath_status, elem),
+            author=grab_value(xpath_author, elem),
+            published=grab_value(xpath_published, elem),
+            body=grab_value(xpath_body, elem),
+            rating=grab_value(xpath_rating, elem),
+            likes=[grab_value('.', elem)
+                   for elem in elementpath.select(root, xpath_like, ns)],
+            dislikes=[grab_value('.', elem)
+                      for elem in elementpath.select(root, xpath_dislike, ns)],
+        )
+
+    xml_bytes = get_object_redis(nr, id)
+    root = read_xml(xml_bytes)
 
     try:
         record = Vocab(
-            id=id,
-            title=grab_value(xpath_title, root),
-            description=grab_value(xpath_description, root),
+            identifier=grab_value(xpath_identification_identifier, root),
+            title=grab_value(xpath_identification_title, root),
+            namespace=Namespace(
+                uri=grab_value(xpath_uri, grab_first(xpath_identification_namespace, root)),
+                prefix=grab_value(xpath_prefix, grab_first(xpath_identification_namespace, root))
+            ) if grab_first(xpath_identification_namespace, root) is not None else None,
+            creators=[create_authority_for(elem)
+                      for elem in elementpath.select(root, xpath_responsibility_creators, ns)],
+            maintainers=[create_authority_for(elem)
+                         for elem in elementpath.select(root, xpath_responsibility_maintainers, ns)],
+            contributors=[create_authority_for(elem)
+                          for elem in elementpath.select(root, xpath_responsibility_contributors, ns)],
+            description=grab_value(xpath_description_description, root),
+            date_issued=grab_value(xpath_description_date_issued, root),
+            languages=[grab_value('.', elem)
+                       for elem in elementpath.select(root, xpath_description_languages, ns)],
+            topic=Topic(
+                unesco=grab_value(xpath_description_topic_unesco, root),
+                nwo=grab_value(xpath_description_topic_nwo, root)
+            ) if grab_first(xpath_description_topic_unesco, root) or
+                 grab_first(xpath_description_topic_nwo, root) else None,
+            keywords=[create_relaxing_authority_for(elem)
+                      for elem in elementpath.select(root, xpath_description_keywords, ns)],
             type=Type(
                 syntax=grab_value(xpath_type_syntax, root),
                 kos=grab_value(xpath_type_kos, root),
                 entity=grab_value(xpath_type_entity, root)
             ),
-            license=License(
-                uri=grab_value(xpath_license_uri, root) or 'http://rightsstatements.org/vocab/UND/1.0/',
-                label=grab_value(xpath_license_label, root) or 'Unknown'
-            ),
-            namespace=Namespace(
-                uri=grab_value(xpath_uri, elementpath.select(root, xpath_root_namespace, ns)[0]),
-                prefix=grab_value(xpath_prefix, elementpath.select(root, xpath_root_namespace, ns)[0])
-            ) if elementpath.select(root, xpath_root_namespace, ns) else None,
-            topic=Topic(
-                domain=Domain(
-                    unesco=grab_value(xpath_unesco, elementpath.select(root, xpath_topic_domain, ns)),
-                    nwo=grab_value(xpath_nwo, elementpath.select(root, xpath_topic_domain, ns))
-                ) if elementpath.select(root, xpath_topic_domain, ns) else None,
-                tags=[create_tag_for(elem)
-                      for elem in elementpath.select(root, xpath_topic_tag, ns)]
-            ) if elementpath.select(root, xpath_topic_domain, ns)
-                 or elementpath.select(root, xpath_topic_tag, ns) else None,
+            licenses=[create_relaxing_authority_for(elem)
+                      for elem in elementpath.select(root, xpath_licenses, ns)],
+            registries=[create_registry_for(elem)
+                        for elem in elementpath.select(root, xpath_is_referenced_by_registries, ns)],
             locations=[create_location_for(elem)
-                       for elem in elementpath.select(root, xpath_root_location, ns)],
-            reviews=[create_review_for(i + 1, elem)
-                     for i, elem in enumerate(elementpath.select(root, xpath_review, ns))
-                     if grab_value(xpath_status, elem) == 'published'],
-            publishers=[create_publisher_for(elem)
-                        for elem in elementpath.select(root, xpath_publisher, ns)],
+                       for elem in elementpath.select(root, xpath_locations, ns)],
             versions=sorted([create_version(elem) for elem in elementpath.select(root, xpath_version, ns)],
-                            key=lambda x: (x.validFrom is not None, x.version), reverse=True)
+                            key=lambda x: (x.validFrom is not None, x.version), reverse=True),
+            reviews=[create_review_for(i + 1, elem)
+                     for i, elem in enumerate(elementpath.select(root, xpath_review, ns))]
         )
     except Exception as e:
         log.error(f'Cannot parse record with id {id}')
@@ -298,8 +331,8 @@ def get_record(id: str) -> Vocab:
     return record
 
 
-def with_version(id: str) -> Generator[Tuple[Vocab, Version], None, None]:
-    record = get_record(id)
+def with_version(nr: int, id: int) -> Generator[Tuple[Vocab, Version], None, None]:
+    record = get_record(nr, id)
     if record and record.versions:
         for version in record.versions:
             yield record, version
@@ -307,33 +340,40 @@ def with_version(id: str) -> Generator[Tuple[Vocab, Version], None, None]:
         log.info(f'No record or versions found for {id}!')
 
 
-def with_version_and_dump(id: str) -> Generator[Tuple[Vocab, Version, str], None, None]:
-    for record, version in with_version(id):
-        cached_version_path = get_cached_version(id, version.version)
+def with_version_and_dump(nr: int, id: int) -> Generator[Tuple[Vocab, Version, str], None, None]:
+    for record, version in with_version(nr, id):
+        cached_version_path = get_cached_version(record.identifier, version.version)
         if cached_version_path is not None:
             yield record, version, cached_version_path
 
 
-def write_location(id: str, version: str, uri: str, type: str, recipe: str | None) -> None:
-    file = get_file_for_id(id)
-    root = read_root(file)
+@contextmanager
+def cmdi_from_redis(nr: int, id: int) -> Generator[etree.Element, None, None]:
+    xml_bytes = get_object_redis(nr, id)
+    xml = read_xml(xml_bytes)
 
-    version_elem = grab_first(f"{voc_root}/cmd:Version/cmd:version[text()='{version}']/..", root)
-    if version_elem is not None:
-        for location in elementpath.select(version_elem, "./cmd:Location", ns):
-            if grab_value("./cmd:recipe", location) == recipe:
-                version_elem.remove(location)
+    yield xml
 
-        location = etree.SubElement(version_elem, f"{ns_prefix}Location", nsmap=ns)
+    xml_bytes = write_xml(xml)
+    store_object_redis(nr, id, xml_bytes)
 
-        uri_elem = etree.SubElement(location, f"{ns_prefix}uri", nsmap=ns)
-        uri_elem.text = uri
 
-        type_elem = etree.SubElement(location, f"{ns_prefix}type", nsmap=ns)
-        type_elem.text = type
+def write_location(nr: int, id: int, version: str, uri: str, type: str, recipe: str | None) -> None:
+    with cmdi_from_redis(nr, id) as xml:
+        version_elem = grab_first(f"{voc_root}/cmd:Version/cmd:version[text()='{version}']/..", xml)
+        if version_elem is not None:
+            for location in elementpath.select(version_elem, "./cmd:Location", ns):
+                if grab_value("./cmd:recipe", location) == recipe:
+                    version_elem.remove(location)
 
-        if recipe:
-            recipe_elem = etree.SubElement(location, f"{ns_prefix}recipe", nsmap=ns)
-            recipe_elem.text = recipe
+            location = etree.SubElement(version_elem, f"{ns_prefix}Location", nsmap=ns)
 
-        write_root(file, root)
+            uri_elem = etree.SubElement(location, f"{ns_prefix}uri", nsmap=ns)
+            uri_elem.text = uri
+
+            type_elem = etree.SubElement(location, f"{ns_prefix}type", nsmap=ns)
+            type_elem.text = type
+
+            if recipe:
+                recipe_elem = etree.SubElement(location, f"{ns_prefix}recipe", nsmap=ns)
+                recipe_elem.text = recipe

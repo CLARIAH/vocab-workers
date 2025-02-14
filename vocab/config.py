@@ -1,5 +1,9 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 redis_uri = os.environ.get('REDIS_URI', 'redis://localhost/0')
 log_level = os.environ.get('LOG_LEVEL', 'INFO')
 concurrency = os.environ.get('CONCURRENCY', 10)

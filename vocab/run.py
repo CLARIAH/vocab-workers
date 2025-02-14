@@ -1,14 +1,15 @@
 import os
+import sys
 
-from vocab.tasks import cache, sparql, documentation, jsonld, lov, summarizer, skosmos
+from vocab.pipeline import run_pipeline_with_file
 
 if __name__ == '__main__':
-    # Run one task for one specific vocabulary
-    # jsonld.create_jsonld.delay('pico')
+    filename = sys.argv[1]
 
-    path = '/Users/kerim/git/vocab-registry-data/records'
-    for (dirpath, dirnames, filenames) in os.walk(path):
-        if dirpath == path:
-            for f in filenames:
-                id = os.path.splitext(f)[0]
-                jsonld.create_jsonld.delay(id)
+    if os.path.isfile(filename):
+        run_pipeline_with_file(filename)
+    else:
+        for (dirpath, dirnames, filenames) in os.walk(filename):
+            if dirpath == filename:
+                for f in filenames:
+                    run_pipeline_with_file(f)

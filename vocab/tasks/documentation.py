@@ -1,4 +1,5 @@
 import os
+import sys
 import gzip
 import logging
 
@@ -7,9 +8,10 @@ from pylode import OntPub, PylodeError
 from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS, Graph
 
 from vocab.app import celery
-from vocab.util.rdf import load_cached_into_graph
 from vocab.cmdi import with_version_and_dump, write_location
 from vocab.config import vocab_static_url, root_path, docs_rel_path
+from vocab.util.file import run_work_for_file
+from vocab.util.rdf import load_cached_into_graph
 
 log = logging.getLogger(__name__)
 
@@ -18,20 +20,23 @@ def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) 
     return os.path.join(id, version + '.html' + ('' if without_gz else '.gz'))
 
 
-@celery.task(name='rdf.documentation')
-def create_documentation(id: str):
-    for record, version, cached_version_path in with_version_and_dump(id):
-        path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(id, version.version))
+@celery.task(name='rdf.documentation', autoretry_for=(Exception,),
+             default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
+def create_documentation(nr: int, id: int):
+    for record, version, cached_version_path in with_version_and_dump(nr, id):
+        path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(record.identifier, version.version))
         if not os.path.exists(path):
-            log.info(f"No documentation found for {id} with version {version.version}, creating!")
+            log.info(f"No documentation found for {record.identifier} with version {version.version}, creating!")
             location = next((loc for loc in version.locations if loc.type == 'dump'), None)
-            create_documentation_for_file(id, version.version, record.title, location.location, cached_version_path)
+            create_documentation_for_file(nr, id, record.identifier, version.version, record.title, location.location,
+                                          cached_version_path)
         else:
-            log.info(f"Write documentation location for {id} and version {version.version}")
-            write_docs_location(id, version.version)
+            log.info(f"Write documentation location for {record.identifier} and version {version.version}")
+            write_docs_location(nr, id, record.identifier, version.version)
 
 
-def create_documentation_for_file(id: str, version: str, title: str, uri: str, cached_version_path: str) -> None:
+def create_documentation_for_file(nr: int, id: int, identifier: str, version: str, title: str, uri: str,
+                                  cached_version_path: str) -> None:
     try:
         graph = Graph()
         load_cached_into_graph(graph, cached_version_path)
@@ -54,20 +59,25 @@ def create_documentation_for_file(id: str, version: str, title: str, uri: str, c
 
             od = OntPub(ontology=graph)
 
-        doc_path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(id, version))
+        doc_path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(identifier, version))
         os.makedirs(os.path.dirname(doc_path), exist_ok=True)
 
         html = od.make_html()
         html = gzip.compress(bytes(html, 'utf-8'))
         open(doc_path, 'wb').write(html)
 
-        uri = vocab_static_url + '/docs/' + get_relative_path_for_file(id, version, without_gz=True)
-        write_location(id, version, uri, 'homepage', 'doc')
-        log.info(f'Produced documentation for {id} with version {version}!')
+        uri = vocab_static_url + '/docs/' + get_relative_path_for_file(identifier, version, without_gz=True)
+        write_location(nr, id, version, uri, 'homepage', 'doc')
+        log.info(f'Produced documentation for {identifier} with version {version}!')
     except Exception as e:
-        log.error(f'Doc error for {id} with version {version}: {e}')
+        log.error(f'Doc error for {identifier} with version {version}: {e}')
 
 
-def write_docs_location(id: str, version: str) -> None:
-    uri = vocab_static_url + '/docs/' + get_relative_path_for_file(id, version, without_gz=True)
-    write_location(id, version, uri, 'homepage', 'doc')
+def write_docs_location(nr: int, id: int, identifier: str, version: str) -> None:
+    uri = vocab_static_url + '/docs/' + get_relative_path_for_file(identifier, version, without_gz=True)
+    write_location(nr, id, version, uri, 'homepage', 'doc')
+
+
+if __name__ == '__main__':
+    with run_work_for_file(sys.argv[1]) as (nr, id):
+        create_documentation(nr, id)

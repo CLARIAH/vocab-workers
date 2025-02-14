@@ -18,6 +18,7 @@ celery = Celery(
     ],
     task_ignore_result=True,
     task_store_errors_even_if_ignored=True,
+    broker_connection_retry_on_startup=True,
 )
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import bz2
 import gzip
 import logging
@@ -11,8 +12,9 @@ from zipfile import ZipFile
 from vocab.app import celery
 from vocab.cmdi import with_version, write_location
 from vocab.config import root_path, cache_rel_path, vocab_static_url
-from vocab.util.rdf import content_type_extensions
 from vocab.util.fs import get_cached_version
+from vocab.util.rdf import content_type_extensions
+from vocab.util.file import run_work_for_file
 
 log = logging.getLogger(__name__)
 
@@ -21,24 +23,25 @@ def get_relative_path_for_file(id: str, version: str, extension: str) -> str:
     return os.path.join(id, version + extension)
 
 
-@celery.task(name='cache')
-def cache_files(id: str) -> None:
-    for record, version in with_version(id):
+@celery.task(name='cache', autoretry_for=(Exception,), retry_backoff=5,
+             default_retry_delay=60 * 30, retry_kwargs={'max_retries': 10})
+def cache_files(nr: int, id: int) -> None:
+    for record, version in with_version(nr, id):
         for location in version.locations:
             if location.type == 'dump':
-                cached_path = get_cached_version(id, version.version)
+                cached_path = get_cached_version(record.identifier, version.version)
                 if cached_path is None:
                     try:
-                        log.info(f"No cache found for {id}: {location.location}, creating!")
-                        cache_for_file(location.location, id, version.version)
+                        log.info(f"No cache found for {record.identifier}: {location.location}, creating!")
+                        cache_for_file(nr, id, location.location, record.identifier, version.version)
                     except Exception as e:
-                        log.error(f'Failed to cache for {id}: {location.location}: {e}')
+                        log.error(f'Failed to cache for {record.identifier}: {location.location}: {e}')
                 else:
-                    log.info(f"Write cache location fo {id} and version {version.version}")
-                    write_cache_location(id, version.version, cached_path)
+                    log.info(f"Write cache location for {record.identifier} and version {version.version}")
+                    write_cache_location(nr, id, record.identifier, version.version, cached_path)
 
 
-def cache_for_file(url: str, id: str, version: str) -> None:
+def cache_for_file(nr: int, id: int, url: str, identifier: str, version: str) -> None:
     response = requests.get(url, allow_redirects=True)
     if response.ok:
         url_hash = ''
@@ -74,24 +77,30 @@ def cache_for_file(url: str, id: str, version: str) -> None:
             if content_type in content_type_extensions:
                 file_extension = content_type_extensions[content_type]
             else:
-                log.warning(f"No file extension, but we have a content type for {id}: {content_type}!")
+                log.warning(f"No file extension, but we have a content type for {identifier}: {content_type}!")
 
         if file_extension:
-            cached_file_name = os.path.join(root_path, cache_rel_path, get_relative_path_for_file(id, version, file_extension) + '.gz')
+            cached_file_name = os.path.join(root_path, cache_rel_path,
+                                            get_relative_path_for_file(identifier, version, file_extension) + '.gz')
             os.makedirs(os.path.dirname(cached_file_name), exist_ok=True)
             open(cached_file_name, 'wb').write(content)
 
-            uri = f'{vocab_static_url}/cache/{get_relative_path_for_file(id, version, file_extension)}'
-            write_location(id, version, uri, 'dump', 'cache')
+            uri = f'{vocab_static_url}/cache/{get_relative_path_for_file(identifier, version, file_extension)}'
+            write_location(nr, id, version, uri, 'dump', 'cache')
 
-            log.info(f"Cache created for {id} and version {version}!")
+            log.info(f"Cache created for {identifier} and version {version}!")
         else:
-            log.error(f"No file extension found for {id} and version {version}!")
+            log.error(f"No file extension found for {identifier} and version {version}!")
     else:
-        log.error(f"Failed to create cache for {id} and version {version}!")
+        log.error(f"Failed to create cache for {identifier} and version {version}!")
 
 
-def write_cache_location(id: str, version: str, cached_path: str) -> None:
+def write_cache_location(nr: int, id: int, identifier: str, version: str, cached_path: str) -> None:
     file_name, file_extension = os.path.splitext(cached_path[:-3])
-    uri = f'{vocab_static_url}/cache/{get_relative_path_for_file(id, version, file_extension)}'
-    write_location(id, version, uri, 'dump', 'cache')
+    uri = f'{vocab_static_url}/cache/{get_relative_path_for_file(identifier, version, file_extension)}'
+    write_location(nr, id, version, uri, 'dump', 'cache')
+
+
+if __name__ == '__main__':
+    with run_work_for_file(sys.argv[1]) as (nr, id):
+        cache_files(nr, id)
