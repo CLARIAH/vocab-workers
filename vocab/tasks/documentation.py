@@ -8,7 +8,7 @@ from pylode import OntPub, PylodeError
 from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS, Graph
 
 from vocab.app import celery
-from vocab.cmdi import with_version_and_dump, write_location
+from vocab.cmdi import with_version_and_dump, write_location, get_record
 from vocab.config import vocab_static_url, root_path, docs_rel_path
 from vocab.util.file import run_work_for_file
 from vocab.util.rdf import load_cached_into_graph
@@ -24,15 +24,18 @@ def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) 
              default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
 def create_documentation(nr: int, id: int):
     for record, version, cached_version_path in with_version_and_dump(nr, id):
-        path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(record.identifier, version.version))
-        if not os.path.exists(path):
-            log.info(f"No documentation found for {record.identifier} with version {version.version}, creating!")
-            location = next((loc for loc in version.locations if loc.type == 'dump'), None)
-            create_documentation_for_file(nr, id, record.identifier, version.version, record.title, location.location,
-                                          cached_version_path)
-        else:
-            log.info(f"Write documentation location for {record.identifier} and version {version.version}")
-            write_docs_location(nr, id, record.identifier, version.version)
+        if record.type.syntax in ['owl', 'skos', 'rdfs']:
+            path = os.path.join(root_path, docs_rel_path,
+                                get_relative_path_for_file(record.identifier, version.version))
+            if not os.path.exists(path):
+                log.info(f"No documentation found for {record.identifier} with version {version.version}, creating!")
+                location = next((loc for loc in version.locations if loc.type == 'dump'), None)
+                create_documentation_for_file(nr, id, record.identifier, version.version, record.title,
+                                              location.location,
+                                              cached_version_path)
+            else:
+                log.info(f"Write documentation location for {record.identifier} and version {version.version}")
+                write_docs_location(nr, id, record.identifier, version.version)
 
 
 def create_documentation_for_file(nr: int, id: int, identifier: str, version: str, title: str, uri: str,

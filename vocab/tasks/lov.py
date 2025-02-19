@@ -27,15 +27,16 @@ class MinimumVocabInfoLOV(BaseModel):
              default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
 def lov(nr: int, id: int) -> None:
     record = get_record(nr, id)
-    response = session.get(lov_api_url, params={'vocab': record.identifier})
-    if response.status_code == requests.codes.ok:
-        data = MinimumVocabInfoLOV.model_validate(response.json())
-        log.info(f'Work wit vocab {record.identifier} results: {data}')
+    if record and record.type.syntax in ['owl', 'skos', 'rdfs']:
+        response = session.get(lov_api_url, params={'vocab': record.identifier})
+        if response.status_code == requests.codes.ok:
+            data = MinimumVocabInfoLOV.model_validate(response.json())
+            log.info(f'Work wit vocab {record.identifier} results: {data}')
 
-        if data.uri and data.prefix:
-            write_namespace(nr, id, data.uri, data.prefix)
-    else:
-        log.info(f'No vocab {record.identifier} results!')
+            if data.uri and data.prefix:
+                write_namespace(nr, id, data.uri, data.prefix)
+        else:
+            log.info(f'No vocab {record.identifier} results!')
 
 
 def write_namespace(nr: int, id: int, uri: str, prefix: str) -> None:

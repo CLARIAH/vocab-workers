@@ -11,11 +11,11 @@ from rdflib import Namespace, Graph, DCAT, DCTERMS, SDO, VOID, RDF, Literal, URI
 
 from vocab.app import celery
 from vocab.cmdi import get_record, Vocab, Version, Review
-from vocab.config import root_path, jsonld_rel_path, vocab_namespace
+from vocab.config import root_path, jsonld_rel_path, vocab_registry_url
 from vocab.util.rdf import get_sparql_store
 from vocab.util.file import run_work_for_file
 
-VOCAB = Namespace(vocab_namespace)
+VOCAB = Namespace(vocab_registry_url + '/vocab/')
 XTYPES = Namespace('http://purl.org/xtypes/')
 
 CONTEXT = json.loads(files('vocab.util').joinpath('context.json').read_bytes())

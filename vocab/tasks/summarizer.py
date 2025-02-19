@@ -49,11 +49,12 @@ class Summary(BaseModel):
              default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
 def summarizer(nr: int, id: int) -> None:
     for record, version, cached_version_path in with_version_and_dump(nr, id):
-        try:
-            summary = summarize(cached_version_path)
-            write_summary_statements(nr, id, version.version, summary)
-        except Exception as e:
-            log.error(f'Failed to summarize for {record.identifier} and version {version.version}: {e}')
+        if record.type.syntax in ['owl', 'skos', 'rdfs']:
+            try:
+                summary = summarize(cached_version_path)
+                write_summary_statements(nr, id, version.version, summary)
+            except Exception as e:
+                log.error(f'Failed to summarize for {record.identifier} and version {version.version}: {e}')
 
 
 def summarize(path: str) -> Summary:

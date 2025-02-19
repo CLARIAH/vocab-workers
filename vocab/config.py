@@ -13,10 +13,7 @@ vocab_static_url = os.environ.get('VOCAB_STATIC_URL', 'https://localhost:5000')
 sparql_url = os.environ.get('SPARQL_URL', 'https://localhost:5000')
 sparql_update_url = os.environ.get('SPARQL_UPDATE_URL', 'https://localhost:5000')
 
-root_path = os.environ.get('ROOT_PATH')
-records_rel_path = os.environ.get('RECORDS_REL_PATH', 'records')
+root_path = os.environ.get('ROOT_PATH', './data')
 jsonld_rel_path = os.environ.get('JSONLD_REL_PATH', 'jsonld')
 docs_rel_path = os.environ.get('DOCS_REL_PATH', 'docs')
 cache_rel_path = os.environ.get('CACHE_REL_PATH', 'cache')
-
-vocab_namespace = os.environ.get('VOCAB_NS', 'https://registry.vocabs.dev.clariah.nl/vocab/')
