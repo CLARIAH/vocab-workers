@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from vocab.app import celery
-from vocab.cmdi import get_record, cmdi_from_redis
+from vocab.cmdi import get_record, cmdi_from_redis, write_registry
 from vocab.util.http import session
 from vocab.util.file import run_work_for_file
 from vocab.util.xml import grab_first, ns_prefix, ns
@@ -17,10 +17,8 @@ lov_api_url = 'https://lov.linkeddata.es/dataset/lov/api/v2/vocabulary/info'
 
 
 class MinimumVocabInfoLOV(BaseModel):
-    homepage: Optional[str] = None
     nsp: Optional[str] = None
     prefix: Optional[str] = None
-    uri: Optional[str] = None
 
 
 @celery.task(name='rdf.lov', autoretry_for=(Exception,),
@@ -33,8 +31,10 @@ def lov(nr: int, id: int) -> None:
             data = MinimumVocabInfoLOV.model_validate(response.json())
             log.info(f'Work wit vocab {record.identifier} results: {data}')
 
+            write_registry(nr, id, "LOV", "https://lov.linkeddata.es",
+                           f"https://lov.linkeddata.es/dataset/lov/vocabs/{record.identifier}")
             if data.uri and data.prefix:
-                write_namespace(nr, id, data.uri, data.prefix)
+                write_namespace(nr, id, data.nsp, data.prefix)
         else:
             log.info(f'No vocab {record.identifier} results!')
 

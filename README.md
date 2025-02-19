@@ -75,13 +75,13 @@ summaries are then written back into the CMDI record.
 
 This task queries the [Linked Open Vocabularies (LOV)](https://lov.linkeddata.es/dataset/lov/vocabs) with the vocabulary
 mentioned in a vocabulary record if it is of an RDF type. If the vocabulary was found in the LOV dataset, then the task
-will write the LOV URI as a publisher to the record. Furthermore, it will update the namespace of the vocabulary in the
+will write the LOV URI as a registry to the record. Furthermore, it will update the namespace of the vocabulary in the
 record.
 
 ### Bartoc task: `vocab.tasks.bartoc`
 
 This task queries [Bartoc](https://bartoc.org/) with the vocabulary mentioned in a vocabulary record if it is of an
-RDF type. If the vocabulary was found in Bartoc, then the task will write the Bartoc URI as a publisher to the record.
+RDF type. If the vocabulary was found in Bartoc, then the task will write the Bartoc URI as a registry to the record.
 
 ### JSON-LD task: `vocab.tasks.jsonld`
 

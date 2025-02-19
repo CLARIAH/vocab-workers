@@ -1,7 +1,7 @@
 from celery import chain
 
 from vocab.util.file import run_work_for_file
-from vocab.tasks import cache, documentation, sparql, summarizer, lov, jsonld
+from vocab.tasks import cache, documentation, sparql, summarizer, lov, skosmos, jsonld
 
 
 def pipeline(nr: int, id: int):
@@ -11,6 +11,7 @@ def pipeline(nr: int, id: int):
         sparql.load_into_sparql_store.si(nr, id),
         summarizer.summarizer.si(nr, id),
         lov.lov.si(nr, id),
+        skosmos.add_to_skosmos_config.si(nr, id),
         jsonld.create_jsonld.si(nr, id),
     )().get()
 

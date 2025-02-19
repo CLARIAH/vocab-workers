@@ -377,3 +377,27 @@ def write_location(nr: int, id: int, version: str, uri: str, type: str, recipe: 
             if recipe:
                 recipe_elem = etree.SubElement(location, f"{ns_prefix}recipe", nsmap=ns)
                 recipe_elem.text = recipe
+
+
+def write_registry(nr: int, id: int, title: str, url: str, landing_page: str | None) -> None:
+    with (cmdi_from_redis(nr, id) as xml):
+        is_referenced_by_elem = grab_first(f"{voc_root}/cmd:IsReferencedBy", xml)
+        if is_referenced_by_elem is None:
+            is_referenced_by_elem = etree.SubElement(grab_first(f"{voc_root}", xml), f"{ns_prefix}IsReferencedBy",
+                                                     nsmap=ns)
+
+        registry = grab_first(f"./cmd:Registry/cmd:url[text()='{url}']/..", is_referenced_by_elem)
+        if registry:
+            is_referenced_by_elem.remove(registry)
+
+        registry = etree.SubElement(is_referenced_by_elem, f"{ns_prefix}Registry", nsmap=ns)
+
+        title_elem = etree.SubElement(registry, f"{ns_prefix}title", nsmap=ns)
+        title_elem.text = title
+
+        url_elem = etree.SubElement(registry, f"{ns_prefix}url", nsmap=ns)
+        url_elem.text = url
+
+        if landing_page:
+            landing_page_elem = etree.SubElement(registry, f"{ns_prefix}landingPage", nsmap=ns)
+            landing_page_elem.text = landing_page

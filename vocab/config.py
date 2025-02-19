@@ -12,6 +12,7 @@ vocab_registry_url = os.environ.get('VOCAB_REGISTRY_URL', 'https://localhost:500
 vocab_static_url = os.environ.get('VOCAB_STATIC_URL', 'https://localhost:5000')
 sparql_url = os.environ.get('SPARQL_URL', 'https://localhost:5000')
 sparql_update_url = os.environ.get('SPARQL_UPDATE_URL', 'https://localhost:5000')
+skosmos_url = os.environ.get('SKOSMOS_URL', 'https://localhost:5000')
 
 root_path = os.environ.get('ROOT_PATH', './data')
 jsonld_rel_path = os.environ.get('JSONLD_REL_PATH', 'jsonld')

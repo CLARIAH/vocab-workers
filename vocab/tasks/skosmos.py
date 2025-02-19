@@ -6,7 +6,7 @@ from rdflib import Graph, Namespace, DC, VOID, RDF, Literal, URIRef
 
 from vocab.app import celery
 from vocab.cmdi import with_version, write_location
-from vocab.config import root_path
+from vocab.config import root_path, vocab_registry_url, skosmos_url
 from vocab.util.lock import task_lock
 from vocab.util.file import run_work_for_file
 
@@ -31,18 +31,20 @@ def update_skosmos_config_with(nr: int, id: int, identifier: str, version, title
     graph = Graph()
     graph.parse(config_file_path)
 
-    vocab_config_graph = create_skosmos_vocab_config(identifier, version, title)
-    graph = graph + vocab_config_graph
+    uri = LOCAL[identifier + '__' + version]
+    if uri not in graph.subjects():
+        vocab_config_graph = create_skosmos_vocab_config(uri, identifier, version, title)
+        graph = graph + vocab_config_graph
 
-    config_ttl = graph.serialize(format='ttl')
-    with open(config_file_path, 'w') as f:
-        f.write(config_ttl)
+        config_ttl = graph.serialize(format='ttl')
+        with open(config_file_path, 'w') as f:
+            f.write(config_ttl)
 
-    write_location(nr, id, version, f'https://skosmos.vocabs.dev.clariah.nl/{identifier}', 'homepage', 'skosmos')
+        write_location(nr, id, version, f'{skosmos_url}/{identifier}__{version}', 'homepage', 'skosmos')
 
 
-def create_skosmos_vocab_config(id: str, version: str, title: str) -> Graph:
-    uri = LOCAL[id + '__' + version]
+def create_skosmos_vocab_config(uri: URIRef, identifier: str, version: str, title: str) -> Graph:
+    graph_uri = URIRef(f'{vocab_registry_url}/vocab/{identifier}/version/{version}')
 
     graph = Graph()
 
@@ -54,8 +56,8 @@ def create_skosmos_vocab_config(id: str, version: str, title: str) -> Graph:
     graph.add((uri, DC.title, Literal(title + ' @ ' + version, lang='en')))
     graph.add((uri, SKOSMOS.shortName, Literal(id + '@' + version)))
     graph.add((uri, SKOSMOS.language, Literal('en')))
-    graph.add((uri, VOID.uriSpace, Literal("urn:vocab:" + id + '@' + version)))
-    graph.add((uri, SKOSMOS.sparqlGraph, URIRef("urn:vocab:" + id + '@' + version)))
+    graph.add((uri, VOID.uriSpace, graph_uri))
+    graph.add((uri, SKOSMOS.sparqlGraph, graph_uri))
 
     return graph
 
