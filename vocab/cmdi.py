@@ -325,7 +325,7 @@ def get_record(nr: int, id: int) -> Vocab:
                      for i, elem in enumerate(elementpath.select(root, xpath_review, ns))]
         )
     except Exception as e:
-        log.error(f'Cannot parse record with id {id}')
+        log.error(f'Cannot parse record nr {nr}')
         raise e
 
     return record
