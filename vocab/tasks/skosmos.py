@@ -8,7 +8,7 @@ from vocab.app import celery
 from vocab.cmdi import with_version, write_location
 from vocab.config import root_path, vocab_registry_url, skosmos_url
 from vocab.util.lock import task_lock
-from vocab.util.file import get_files_in_path, run_work_for_file
+from vocab.util.work import get_files_in_path, run_work_for_file
 
 log = logging.getLogger(__name__)
 

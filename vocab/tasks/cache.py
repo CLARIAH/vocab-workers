@@ -14,7 +14,7 @@ from vocab.cmdi import with_version, write_location
 from vocab.config import root_path, cache_rel_path, vocab_static_url
 from vocab.util.fs import get_cached_version
 from vocab.util.rdf import content_type_extensions
-from vocab.util.file import get_files_in_path, run_work_for_file
+from vocab.util.work import get_files_in_path, run_work_for_file
 
 log = logging.getLogger(__name__)
 
