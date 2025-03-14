@@ -10,7 +10,7 @@ from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS, Graph
 from vocab.app import celery
 from vocab.cmdi import with_version_and_dump, write_location, get_record
 from vocab.config import vocab_static_url, root_path, docs_rel_path
-from vocab.util.file import run_work_for_file
+from vocab.util.work import run_work_for_file
 from vocab.util.rdf import load_cached_into_graph
 
 log = logging.getLogger(__name__)

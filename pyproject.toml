@@ -23,6 +23,9 @@ beautifulsoup4 = "^4.13.3"
 markdown = "^3.7"
 pyld = "^2.0.4"
 python-dotenv = "^1.0.1"
+fastapi = "^0.115.11"
+uvicorn = {version = "^0.34.0", extras = ["standard"]}
+fastapi-cli = "^0.0.7"
 
 
 [build-system]

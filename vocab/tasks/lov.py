@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from vocab.app import celery
 from vocab.cmdi import get_record, cmdi_from_redis, write_registry
 from vocab.util.http import session
-from vocab.util.file import run_work_for_file
+from vocab.util.work import run_work_for_file
 from vocab.util.xml import grab_first, ns_prefix, ns
 
 log = logging.getLogger(__name__)
