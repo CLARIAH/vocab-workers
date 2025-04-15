@@ -8,6 +8,11 @@ redis_uri = os.environ.get('REDIS_URI', 'redis://localhost/0')
 log_level = os.environ.get('LOG_LEVEL', 'INFO')
 concurrency = os.environ.get('CONCURRENCY', 10)
 
+elasticsearch_uri = os.environ.get('ES_URI', 'http://localhost:9200')
+elasticsearch_index = os.environ.get('ES_INDEX', 'vocab')
+elasticsearch_user = os.environ.get('ES_USER')
+elasticsearch_password = os.environ.get('ES_PASSWORD')
+
 vocab_registry_url = os.environ.get('VOCAB_REGISTRY_URL', 'https://localhost:5000')
 vocab_static_url = os.environ.get('VOCAB_STATIC_URL', 'https://localhost:5000')
 sparql_url = os.environ.get('SPARQL_URL', 'https://localhost:5000')
