@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from vocab.app import celery
 from vocab.cmdi import get_record, cmdi_from_redis, write_registry
 from vocab.util.http import session
-from vocab.util.file import run_work_for_file
-from vocab.util.xml import grab_first, ns_prefix, ns
+from vocab.util.file import get_files_in_path, run_work_for_file
+from vocab.util.xml import grab_first, ns_prefix, ns, voc_root
 
 log = logging.getLogger(__name__)
 lov_api_url = 'https://lov.linkeddata.es/dataset/lov/api/v2/vocabulary/info'
@@ -33,7 +33,7 @@ def lov(nr: int, id: int) -> None:
 
             write_registry(nr, id, "LOV", "https://lov.linkeddata.es",
                            f"https://lov.linkeddata.es/dataset/lov/vocabs/{record.identifier}")
-            if data.uri and data.prefix:
+            if data.nsp and data.prefix:
                 write_namespace(nr, id, data.nsp, data.prefix)
         else:
             log.info(f'No vocab {record.identifier} results!')
@@ -41,7 +41,7 @@ def lov(nr: int, id: int) -> None:
 
 def write_namespace(nr: int, id: int, uri: str, prefix: str) -> None:
     with cmdi_from_redis(nr, id) as vocab:
-        namespace = grab_first("./cmd:Identification/cmd:Namespace", vocab)
+        namespace = grab_first(f"{voc_root}/cmd:Identification/cmd:Namespace", vocab)
         if namespace is None:
             identification = grab_first("./cmd:Identification", vocab)
             namespace = etree.SubElement(identification, f"{ns_prefix}Namespace", nsmap=ns)
@@ -59,5 +59,6 @@ def write_namespace(nr: int, id: int, uri: str, prefix: str) -> None:
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        lov(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            lov(nr, id)

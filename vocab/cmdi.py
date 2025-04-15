@@ -304,8 +304,8 @@ def get_record(nr: int, id: int) -> Vocab:
             topic=Topic(
                 unesco=grab_value(xpath_description_topic_unesco, root),
                 nwo=grab_value(xpath_description_topic_nwo, root)
-            ) if grab_first(xpath_description_topic_unesco, root) or
-                 grab_first(xpath_description_topic_nwo, root) else None,
+            ) if grab_first(xpath_description_topic_unesco, root) is not None or
+                 grab_first(xpath_description_topic_nwo, root) is not None else None,
             keywords=[create_relaxing_authority_for(elem)
                       for elem in elementpath.select(root, xpath_description_keywords, ns)],
             type=Type(
@@ -387,7 +387,7 @@ def write_registry(nr: int, id: int, title: str, url: str, landing_page: str | N
                                                      nsmap=ns)
 
         registry = grab_first(f"./cmd:Registry/cmd:url[text()='{url}']/..", is_referenced_by_elem)
-        if registry:
+        if registry is not None:
             is_referenced_by_elem.remove(registry)
 
         registry = etree.SubElement(is_referenced_by_elem, f"{ns_prefix}Registry", nsmap=ns)
@@ -398,6 +398,6 @@ def write_registry(nr: int, id: int, title: str, url: str, landing_page: str | N
         url_elem = etree.SubElement(registry, f"{ns_prefix}url", nsmap=ns)
         url_elem.text = url
 
-        if landing_page:
+        if landing_page is not None:
             landing_page_elem = etree.SubElement(registry, f"{ns_prefix}landingPage", nsmap=ns)
             landing_page_elem.text = landing_page

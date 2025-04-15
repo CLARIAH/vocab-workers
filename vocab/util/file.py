@@ -1,3 +1,4 @@
+import os
 import re
 import time
 import logging
@@ -29,3 +30,12 @@ def run_work_for_file(file: str) -> Generator[Tuple[int, int], None, None]:
 
     delete_object_redis(nr, id)
     log.info(f"Finished work for {file} with nr {nr} and id {id}")
+
+
+def get_files_in_path(path: str) -> [str]:
+    if os.path.isfile(path):
+        return [path]
+    else:
+        for (dirpath, dirnames, filenames) in os.walk(path):
+            if dirpath == path:
+                return [os.path.join(dirpath, f) for f in filenames]

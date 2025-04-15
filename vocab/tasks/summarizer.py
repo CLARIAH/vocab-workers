@@ -10,7 +10,7 @@ from rdflib import Graph, RDF, XSD, URIRef, Literal
 
 from vocab.app import celery
 from vocab.cmdi import with_version_and_dump, cmdi_from_redis
-from vocab.util.file import run_work_for_file
+from vocab.util.file import get_files_in_path, run_work_for_file
 from vocab.util.rdf import load_cached_into_graph
 from vocab.util.xml import ns, ns_prefix, voc_root, grab_first
 
@@ -214,5 +214,6 @@ def write_summary_statements(nr: int, id: int, version: str, summary: Summary) -
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        summarizer(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            summarizer(nr, id)

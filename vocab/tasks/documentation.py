@@ -8,9 +8,9 @@ from pylode import OntPub, PylodeError
 from rdflib import OWL, RDF, URIRef, DCTERMS, Literal, PROF, SKOS, Graph
 
 from vocab.app import celery
-from vocab.cmdi import with_version_and_dump, write_location, get_record
+from vocab.cmdi import with_version_and_dump, write_location
 from vocab.config import vocab_static_url, root_path, docs_rel_path
-from vocab.util.file import run_work_for_file
+from vocab.util.file import get_files_in_path, run_work_for_file
 from vocab.util.rdf import load_cached_into_graph
 
 log = logging.getLogger(__name__)
@@ -82,5 +82,6 @@ def write_docs_location(nr: int, id: int, identifier: str, version: str) -> None
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        create_documentation(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            create_documentation(nr, id)

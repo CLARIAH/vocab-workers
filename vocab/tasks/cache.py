@@ -14,7 +14,7 @@ from vocab.cmdi import with_version, write_location
 from vocab.config import root_path, cache_rel_path, vocab_static_url
 from vocab.util.fs import get_cached_version
 from vocab.util.rdf import content_type_extensions
-from vocab.util.file import run_work_for_file
+from vocab.util.file import get_files_in_path, run_work_for_file
 
 log = logging.getLogger(__name__)
 
@@ -102,5 +102,6 @@ def write_cache_location(nr: int, id: int, identifier: str, version: str, cached
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        cache_files(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            cache_files(nr, id)

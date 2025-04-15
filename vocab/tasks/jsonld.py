@@ -13,7 +13,7 @@ from vocab.app import celery
 from vocab.cmdi import get_record, Vocab, Version, Review
 from vocab.config import root_path, jsonld_rel_path, vocab_registry_url
 from vocab.util.rdf import get_sparql_store
-from vocab.util.file import run_work_for_file
+from vocab.util.file import get_files_in_path, run_work_for_file
 
 VOCAB = Namespace(vocab_registry_url + '/vocab/')
 XTYPES = Namespace('http://purl.org/xtypes/')
@@ -262,5 +262,6 @@ def replace_in_sparql_store(old_graph: Graph | None, new_graph: Graph):
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        create_jsonld(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            create_jsonld(nr, id)

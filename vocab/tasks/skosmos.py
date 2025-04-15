@@ -8,7 +8,7 @@ from vocab.app import celery
 from vocab.cmdi import with_version, write_location
 from vocab.config import root_path, vocab_registry_url, skosmos_url
 from vocab.util.lock import task_lock
-from vocab.util.file import run_work_for_file
+from vocab.util.file import get_files_in_path, run_work_for_file
 
 log = logging.getLogger(__name__)
 
@@ -63,5 +63,6 @@ def create_skosmos_vocab_config(uri: URIRef, identifier: str, version: str, titl
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        add_to_skosmos_config(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            add_to_skosmos_config(nr, id)

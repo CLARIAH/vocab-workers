@@ -7,7 +7,7 @@ from rdflib import Graph, URIRef
 from vocab.app import celery
 from vocab.config import sparql_url, vocab_registry_url
 from vocab.cmdi import with_version_and_dump, write_location
-from vocab.util.file import run_work_for_file
+from vocab.util.file import get_files_in_path, run_work_for_file
 from vocab.util.rdf import get_sparql_store, load_cached_into_graph
 
 log = logging.getLogger(__name__)
@@ -40,5 +40,6 @@ def load_into_sparql_store_for_file(nr: int, id: int, identifier: str, version: 
 
 
 if __name__ == '__main__':
-    with run_work_for_file(sys.argv[1]) as (nr, id):
-        load_into_sparql_store(nr, id)
+    for f in get_files_in_path(sys.argv[1]):
+        with run_work_for_file(f) as (nr, id):
+            load_into_sparql_store(nr, id)
