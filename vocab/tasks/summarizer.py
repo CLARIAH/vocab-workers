@@ -10,7 +10,7 @@ from rdflib import Graph, RDF, XSD, URIRef, Literal
 
 from vocab.app import celery
 from vocab.cmdi import with_version_and_dump, cmdi_from_redis
-from vocab.util.file import get_files_in_path, run_work_for_file
+from vocab.util.work import get_files_in_path, run_work_for_file
 from vocab.util.rdf import load_cached_into_graph
 from vocab.util.xml import ns, ns_prefix, voc_root, grab_first
 

@@ -13,7 +13,7 @@ from vocab.app import celery
 from vocab.cmdi import get_record, Vocab, Version, Review
 from vocab.config import root_path, jsonld_rel_path, vocab_registry_url
 from vocab.util.rdf import get_sparql_store
-from vocab.util.file import get_files_in_path, run_work_for_file
+from vocab.util.work import get_files_in_path, run_work_for_file
 
 VOCAB = Namespace(vocab_registry_url + '/vocab/')
 XTYPES = Namespace('http://purl.org/xtypes/')

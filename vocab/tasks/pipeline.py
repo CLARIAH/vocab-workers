@@ -1,11 +1,12 @@
 from celery import chain
 
-from vocab.util.file import run_work_for_file
+from vocab.app import celery
+from vocab.util.work import run_work_for_file, run_work_for_record
 from vocab.tasks import cache, documentation, sparql, summarizer, lov, skosmos, jsonld, index
 
 
 def pipeline(nr: int, id: int):
-    chain(
+    return chain(
         cache.cache_files.si(nr, id),
         documentation.create_documentation.si(nr, id),
         sparql.load_into_sparql_store.si(nr, id),
@@ -19,4 +20,10 @@ def pipeline(nr: int, id: int):
 
 def run_pipeline_with_file(file: str):
     with run_work_for_file(file) as (nr, id):
+        pipeline(nr, id)
+
+
+@celery.task(name='pipeline')
+def run_pipeline_with_record(nr: int):
+    with run_work_for_record(nr) as id:
         pipeline(nr, id)
