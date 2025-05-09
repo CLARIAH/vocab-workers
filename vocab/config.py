@@ -14,10 +14,14 @@ elasticsearch_index = os.environ.get('ES_INDEX', 'vocab')
 elasticsearch_user = os.environ.get('ES_USER')
 elasticsearch_password = os.environ.get('ES_PASSWORD')
 
-vocab_registry_url = os.environ.get('VOCAB_REGISTRY_URL', 'https://localhost:5000')
-vocab_static_url = os.environ.get('VOCAB_STATIC_URL', 'https://localhost:5000')
 sparql_url = os.environ.get('SPARQL_URL', 'https://localhost:5000')
 sparql_update_url = os.environ.get('SPARQL_UPDATE_URL', 'https://localhost:5000')
+sparql_user = os.environ.get('SPARQL_USER')
+sparql_password = os.environ.get('SPARQL_PASSWORD')
+
+vocab_registry_url = os.environ.get('VOCAB_REGISTRY_URL', 'https://localhost:5000')
+vocab_static_url = os.environ.get('VOCAB_STATIC_URL', 'https://localhost:5000')
+
 skosmos_url = os.environ.get('SKOSMOS_URL', 'https://localhost:5000')
 
 root_path = os.environ.get('ROOT_PATH', './data')

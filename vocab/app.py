@@ -8,6 +8,7 @@ celery = Celery(
     broker=redis_uri,
     backend=redis_uri,
     include=[
+        'vocab.tasks.pipeline',
         'vocab.tasks.cache',
         'vocab.tasks.documentation',
         'vocab.tasks.jsonld',
@@ -15,8 +16,8 @@ celery = Celery(
         'vocab.tasks.skosmos',
         'vocab.tasks.sparql',
         'vocab.tasks.summarizer',
+        'vocab.tasks.index',
     ],
-    task_ignore_result=True,
     task_store_errors_even_if_ignored=True,
     broker_connection_retry_on_startup=True,
 )

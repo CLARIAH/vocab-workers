@@ -83,11 +83,6 @@ xpath_publisher = f"{voc_root}/cmd:Publisher"
 
 
 class Authority(BaseModel):
-    uri: str
-    label: str
-
-
-class RelaxingAuthority(BaseModel):
     uri: Optional[str] = None
     label: str
 
@@ -182,9 +177,9 @@ class Vocab(BaseModel):
     date_issued: Optional[datetime] = None
     languages: List[str] = []
     topic: Optional[Topic] = None
-    keywords: List[RelaxingAuthority] = []
+    keywords: List[Authority] = []
     type: Type
-    licenses: List[RelaxingAuthority] = []
+    licenses: List[Authority] = []
     registries: List[Registry] = []
     locations: List[Location]
     versions: List[Version]
@@ -198,8 +193,8 @@ def get_record(nr: int, id: int) -> Vocab:
             label=grab_value(xpath_label, elem),
         )
 
-    def create_relaxing_authority_for(elem: Element) -> RelaxingAuthority:
-        return RelaxingAuthority(
+    def create_relaxing_authority_for(elem: Element) -> Authority:
+        return Authority(
             uri=grab_value(xpath_uri, elem),
             label=grab_value(xpath_label, elem),
         )

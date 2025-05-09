@@ -5,7 +5,7 @@ from vocab.app import celery
 from vocab.cmdi import get_record
 from vocab.config import elasticsearch_index
 from vocab.util.elasticsearch import es
-from vocab.util.file import get_files_in_path, run_work_for_file
+from vocab.util.work import get_files_in_path, run_work_for_file
 
 log = logging.getLogger(__name__)
 

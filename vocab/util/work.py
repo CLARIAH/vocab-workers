@@ -57,10 +57,11 @@ def run_work_for_record(nr: int) -> Generator[int, None, None]:
     log.info(f"Finished work for {nr} with id {id}")
 
 
-def get_files_in_path(path: str) -> [str]:
+def get_files_in_path(path: str) -> list[str]:
     if os.path.isfile(path):
         return [path]
     else:
         for (dirpath, dirnames, filenames) in os.walk(path):
             if dirpath == path:
                 return [os.path.join(dirpath, f) for f in filenames]
+        return []

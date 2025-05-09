@@ -1,7 +1,7 @@
 import gzip
 import xml.sax
 
-from rdflib import Graph, BNode, URIRef
+from rdflib import Graph, BNode
 from rdflib.term import Node
 from rdflib.util import guess_format
 from rdflib.parser import Parser
@@ -10,7 +10,7 @@ from rdflib.exceptions import ParserError
 from rdflib.plugin import PluginException, register
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore, _node_to_sparql
 
-from vocab.config import sparql_url, sparql_update_url
+from vocab.config import sparql_url, sparql_update_url, sparql_user, sparql_password
 
 register('rdfs', Parser, 'rdflib.plugins.parsers.rdfxml', 'RDFXMLParser')
 register('owl', Parser, 'rdflib.plugins.parsers.rdfxml', 'RDFXMLParser')
@@ -38,6 +38,7 @@ def encode_bnode_to_sparql(node: Node | str) -> str:
 
 def get_sparql_store(context_aware: bool = True) -> SPARQLUpdateStore:
     return SPARQLUpdateStore(query_endpoint=sparql_url, update_endpoint=sparql_update_url,
+                             auth=(sparql_user, sparql_password) if sparql_user else None,
                              node_to_sparql=encode_bnode_to_sparql, context_aware=context_aware)
 
 

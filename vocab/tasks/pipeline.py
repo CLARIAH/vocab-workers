@@ -6,16 +6,17 @@ from vocab.tasks import cache, documentation, sparql, summarizer, lov, skosmos, 
 
 
 def pipeline(nr: int, id: int):
-    return chain(
+    res = chain(
         cache.cache_files.si(nr, id),
         documentation.create_documentation.si(nr, id),
         sparql.load_into_sparql_store.si(nr, id),
         summarizer.summarizer.si(nr, id),
         lov.lov.si(nr, id),
-        skosmos.add_to_skosmos_config.si(nr, id),
-        jsonld.create_jsonld.si(nr, id),
+        # skosmos.add_to_skosmos_config.si(nr, id),
+        # jsonld.create_jsonld.si(nr, id),
         index.index.si(nr, id),
-    )().get()
+    )()
+    res.get()
 
 
 def run_pipeline_with_file(file: str):

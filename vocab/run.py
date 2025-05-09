@@ -1,7 +1,7 @@
 import os
 import sys
 
-from vocab.pipeline import run_pipeline_with_file
+from vocab.tasks.pipeline import run_pipeline_with_file
 
 if __name__ == '__main__':
     filename = sys.argv[1]
@@ -12,4 +12,4 @@ if __name__ == '__main__':
         for (dirpath, dirnames, filenames) in os.walk(filename):
             if dirpath == filename:
                 for f in filenames:
-                    run_pipeline_with_file(f)
+                    run_pipeline_with_file(os.path.join(dirpath, f))
