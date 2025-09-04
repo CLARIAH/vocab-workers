@@ -16,7 +16,7 @@ def index(nr: int, id: int) -> None:
     record = get_record(nr, id)
     es.index(
         index=elasticsearch_index,
-        id=record.identifier,
+        id=nr,
         document={
             'id': record.identifier,
             'title': record.title,

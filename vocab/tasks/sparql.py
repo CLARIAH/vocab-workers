@@ -32,6 +32,7 @@ def load_into_sparql_store_for_file(nr: int, id: int, identifier: str, version: 
     if not graph_exists:
         log.info(f"No data found in SPARQL store for {identifier} with version {version}, creating!")
         load_cached_into_graph(graph, cached_version_path, True)
+        # load_cached_into_remote(str(graph_uri), cached_version_path)
 
         uri = f'{sparql_url}?default-graph-uri={urllib.parse.quote(graph_uri)}'
         write_location(nr, id, version, uri, 'endpoint', 'sparql')

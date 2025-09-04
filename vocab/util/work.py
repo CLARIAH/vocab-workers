@@ -16,24 +16,27 @@ log = logging.getLogger(__name__)
 
 @contextmanager
 def run_work_for_file(file: str) -> Generator[Tuple[int, int], None, None]:
-    nr = int(re.search(r'record-(\d+)\.xml', file).group(1))
-    id = int(time.time())
+    try:
+        nr = int(re.search(r'record-(\d+)\.xml', file).group(1))
+        id = int(time.time())
 
-    with open(file, 'rb') as f:
-        data = f.read()
-        store_object_redis(nr, id, data)
+        with open(file, 'rb') as f:
+            data = f.read()
+            store_object_redis(nr, id, data)
 
-    log.info(f"Start work for {file} with nr {nr} and id {id}")
-    yield nr, id
+        log.info(f"Start work for {file} with nr {nr} and id {id}")
+        yield nr, id
 
-    log.info(f"Store xml for {file} with nr {nr} and id {id}")
+        log.info(f"Store xml for {file} with nr {nr} and id {id}")
 
-    xml = read_xml(get_object_redis(nr, id))
-    with open(file, 'wb') as f:
-        f.write(write_xml(xml, True))
+        xml = read_xml(get_object_redis(nr, id))
+        with open(file, 'wb') as f:
+            f.write(write_xml(xml, True))
 
-    delete_object_redis(nr, id)
-    log.info(f"Finished work for {file} with nr {nr} and id {id}")
+        delete_object_redis(nr, id)
+        log.info(f"Finished work for {file} with nr {nr} and id {id}")
+    except Exception as e:
+        log.error(f"Error processing file {file}: {e}", exc_info=True)
 
 
 @contextmanager

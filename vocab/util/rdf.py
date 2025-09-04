@@ -1,5 +1,6 @@
 import gzip
 import xml.sax
+import requests
 
 from rdflib import Graph, BNode
 from rdflib.term import Node
@@ -42,22 +43,64 @@ def get_sparql_store(context_aware: bool = True) -> SPARQLUpdateStore:
                              node_to_sparql=encode_bnode_to_sparql, context_aware=context_aware)
 
 
-def load_cached_into_graph(graph: Graph, cached_version_path: str, use_batch: bool = False) -> None:
+def load_cached_into_graph(graph: Graph, cached_version_path: str, use_batch: bool = False, format: str = None) -> None:
     memory_graph = Graph() if use_batch else None
 
     try:
-        with gzip.open(cached_version_path, 'r') as vocab_data:
+        if format is None:
             format = guess_format(cached_version_path[:-3])
             format = format if format is not None else 'xml'
-            (memory_graph if use_batch else graph).parse(vocab_data, format=format)
-    except xml.sax._exceptions.SAXParseException:
-        with gzip.open(cached_version_path, 'r') as vocab_data:
-            (memory_graph if use_batch else graph).parse(vocab_data, format='ttl')
 
-    if use_batch:
-        with BatchAddGraph(graph, batch_size=100) as batch:
-            for triple in memory_graph:
-                batch.add(triple)
+        with gzip.open(cached_version_path, 'r') as vocab_data:
+            (memory_graph if use_batch else graph).parse(vocab_data, format=format)
+
+        if use_batch:
+            with BatchAddGraph(graph, batch_size=200) as batch:
+                for triple in memory_graph:
+                    batch.add(triple)
+    except xml.sax._exceptions.SAXParseException:
+        if format is None:
+            load_cached_into_graph(graph, cached_version_path, use_batch, 'ttl')
+        else:
+            raise Exception(f"Failed to parse RDF data in {cached_version_path} with format {format}")
+
+
+def load_cached_into_remote(graph_uri: str, cached_version_path: str, format: str = None) -> None:
+    try:
+        if format is None:
+            format = guess_format(cached_version_path[:-3])
+            format = format if format is not None else 'xml'
+
+        content_types = {
+            'xml': 'application/rdf+xml',
+            'turtle': 'text/turtle',
+            'ttl': 'text/turtle',
+            'nt': 'application/n-triples',
+            'n3': 'text/n3',
+            'json-ld': 'application/ld+json',
+            'trig': 'application/trig',
+            'nquads': 'application/n-quads',
+        }
+        content_type = content_types.get(format, 'application/rdf+xml')
+
+        with open(cached_version_path, 'rb') as vocab_data:
+            params = {'graph': graph_uri}
+            headers = {'Content-Type': content_type}
+            auth = (sparql_user, sparql_password) if sparql_user else None
+
+            response = requests.post(
+                sparql_update_url,
+                params=params,
+                data=vocab_data,
+                headers=headers,
+                auth=auth
+            )
+            response.raise_for_status()
+    except requests.RequestException as e:
+        if format is None:
+            load_cached_into_remote(graph_uri, cached_version_path, 'ttl')
+        else:
+            raise Exception(f"Failed to load data into SPARQL store: {e}")
 
 
 def load_remote_graph(url: str) -> Graph:

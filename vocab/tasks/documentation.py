@@ -24,7 +24,7 @@ def get_relative_path_for_file(id: str, version: str, without_gz: bool = False) 
              default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
 def create_documentation(nr: int, id: int):
     for record, version, cached_version_path in with_version_and_dump(nr, id):
-        if record.type.syntax in ['owl', 'skos', 'rdfs']:
+        if record.type.syntax in ['owl', 'skos']:
             path = os.path.join(root_path, docs_rel_path,
                                 get_relative_path_for_file(record.identifier, version.version))
             if not os.path.exists(path):
@@ -73,7 +73,20 @@ def create_documentation_for_file(nr: int, id: int, identifier: str, version: st
         write_location(nr, id, version, uri, 'homepage', 'doc')
         log.info(f'Produced documentation for {identifier} with version {version}!')
     except Exception as e:
-        log.error(f'Doc error for {identifier} with version {version}: {e}')
+        if str(e) == "pyLODE can't detect a URI for an owl:Ontology, a skos:ConceptScheme or a prof:Profile":
+            graph = Graph()
+            load_cached_into_graph(graph, cached_version_path)
+            graph.add((URIRef(uri), RDF.type, OWL.Ontology))
+            graph.add((URIRef(uri), DCTERMS.title, Literal(title)))
+            od = OntPub(ontology=graph)
+            html = od.make_html()
+
+            doc_path = os.path.join(root_path, docs_rel_path, get_relative_path_for_file(identifier, version))
+            doc_path = doc_path[:-3]
+            os.makedirs(os.path.dirname(doc_path), exist_ok=True)
+            open(doc_path, 'w').write(html)
+        else:
+            log.error(f'Doc error for {identifier} with version {version}: {e}')
 
 
 def write_docs_location(nr: int, id: int, identifier: str, version: str) -> None:
