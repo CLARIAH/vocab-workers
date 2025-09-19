@@ -47,12 +47,13 @@ def load_cached_into_graph(graph: Graph, cached_version_path: str, use_batch: bo
     memory_graph = Graph() if use_batch else None
 
     try:
-        if format is None:
-            format = guess_format(cached_version_path[:-3])
-            format = format if format is not None else 'xml'
+        use_format = format
+        if use_format is None:
+            use_format = guess_format(cached_version_path[:-3])
+            use_format = use_format if use_format is not None else 'xml'
 
         with gzip.open(cached_version_path, 'r') as vocab_data:
-            (memory_graph if use_batch else graph).parse(vocab_data, format=format)
+            (memory_graph if use_batch else graph).parse(vocab_data, format=use_format)
 
         if use_batch:
             with BatchAddGraph(graph, batch_size=200) as batch:
