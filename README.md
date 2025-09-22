@@ -1,12 +1,18 @@
-# FAIR vocabularies workers
+# SSH FAIR Vocabulary Registry: Workers
 
-This repository contains code and documentation of one of the components of the FAIR vocabulary registry (i.e., the
-vocabulary workers). General information about the CLARIAH/SSHOC.nl FAIR vocabularies registry project can be found
-here: https://github.com/CLARIAH/vocab-registry.
+[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+
+# Introduction
+This repository contains code and documentation of one of the components of the FAIR vocabulary registry (i.e., the vocabulary workers). 
+
+The FAIR Vocabulary Registry for the Humanities and Social Sciences (SSH) is built in the context of the "Social Sciences and Humanities Open Cloud" project ([SSHOC-NL](https://sshoc.nl/)). This project develops state-of-the-art infrastructure for researchers, in collaboration between [ODISSEI](https://odissei-data.nl/) (Open Data Infrastructure for Social Science and Economic Innovations) and [CLARIAH](https://www.clariah.nl/) (Common Lab Research Infrastructure for the Arts and Humanities).
+
+The SSH FAIR Vocabulary Registry is a one-stop reference service for vocabularies that are relevant to researchers, developers, data managers or curators working on improving the FAIR-ness of research data in the SSH research communities, mostly in the context of SSHOC-NL. It aims to support them in finding, (re)using, publishing and adding vocabularies to the registry.
+
+You are here in one of the repositories that form part of [the architecture](https://registry.vocabs.clariah.nl/about/) of the SSH FAIR vocabulary registry. This specific repository contains the code for the set of python programs that process each vocabulary in the SSH FAIR Vocabulary Registry. The workers perform different tasks, which are detailed below.
 
 The FAIR vocabulary workers are implemented in Python 3 using
-the [Celery distributed task queue](https://docs.celeryq.dev). The workers run on every update of a vocabulary in the
-FAIR vocabulary registry.
+the [Celery distributed task queue](https://docs.celeryq.dev). 
 
 ## Working with the code
 
@@ -94,3 +100,15 @@ SPARQL store using the `SPARQL_UPDATE_URL`.
 This task will load the SKOS vocabulary mentioned in a vocabulary record into [Skosmos](https://skosmos.org/) if it is
 of an `skos` type. It will use a reference to the graph of a version of the vocabulary in the SPARQL store using the
 `SPARQL_URL` and update the Skosmos configuration file.
+
+# Usage
+The workers run automatically on every update of a vocabulary in the vocabulary registry. The output of each task is offered as part of the vocabulary's metadata and "data point" which can be used in the detailed page of each vocabulary of the vocabulary registry ([https://registry.vocabs.clariah.nl](https://registry.vocabs.clariah.nl)).
+
+# Documentation
+More information about the project and the vocabulary registry can be found here: [https://registry.vocabs.clariah.nl/about/](https://registry.vocabs.clariah.nl/about/).
+
+# Support and roadmap
+- Issue tracker: [https://github.com/CLARIAH/vocab-workers/issues](https://github.com/CLARIAH/vocab-workers/issues)
+- Contact maintainer: <a href="&#109;a&#105;l&#116;&#111;:&#115;&#116;&#114;&#117;&#99;&#116;&#117;&#114;&#101;&#100;&#45;&#100;&#97;&#116;&#97;&#64;&#100;&#105;&#46;&#104;&#117;&#99;&#46;&#107;&#110;&#97;&#119;&#46;&#110;&#108;">DI Structured Data Team</a>.
+- Roadmap: [https://github.com/orgs/CLARIAH/projects/12](https://github.com/orgs/CLARIAH/projects/12) (note: this project kanban has temporarily private access)
+
