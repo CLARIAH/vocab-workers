@@ -47,22 +47,16 @@ RECIPE = {
     "rdf": "https://www.w3.org/RDF/"
 }
 
-PUBLISHER = {
-    "yalc": "https://github.com/TriplyDB/YALC",
-    "awesome humanities": "https://github.com/CLARIAH/awesome-humanities-ontologies"
-}
-
-
 @celery.task(name='jsonld', autoretry_for=(Exception,),
              default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
 def create_jsonld(nr: int, id: int) -> None:
     record = get_record(nr, id)
-    current_graph = get_current_jsonld(record.identifier)
+    # TODO: current_graph = get_current_jsonld(record.identifier)
 
     new_graph = init_graph()
     create_rdf_in_graph(record, new_graph)
 
-    replace_in_sparql_store(current_graph, new_graph)
+    # TODO: replace_in_sparql_store(current_graph, new_graph)
 
     jsonld_output = json.loads(new_graph.serialize(format='json-ld', context=CONTEXT))
     jsonld_framed = jsonld.frame(jsonld_output, FRAME)
@@ -70,8 +64,12 @@ def create_jsonld(nr: int, id: int) -> None:
 
     jsonld_data = json.dumps(jsonld_framed, indent=4)
     jsonld_data = bytes(jsonld_data, 'utf-8')
-    jsonld_data = gzip.compress(jsonld_data)
-    open(os.path.join(root_path, jsonld_rel_path, record.identifier + '.jsonld.gz'), 'wb').write(jsonld_data)
+    # TODO: jsonld_data = gzip.compress(jsonld_data)
+    open(os.path.join(root_path, jsonld_rel_path, record.identifier + '.jsonld'), 'wb').write(jsonld_data) # TODO: .gz
+
+    # TODO: Also write TTL for now:
+    ttl_data = new_graph.serialize(format='ttl')
+    open(os.path.join(root_path, jsonld_rel_path, record.identifier + '.ttl'), 'w').write(ttl_data)
 
 
 def get_current_jsonld(id: str) -> Graph | None:
@@ -94,17 +92,18 @@ def init_graph() -> Graph:
     graph.bind('xtypes', XTYPES)
     graph.bind('schema', SDO)
     graph.bind('void', VOID)
+    graph.bind('vocab', 'https://registry.vocabs.clariah.nl/vocab/')
 
     return graph
 
 
 def create_rdf_in_graph(cmdi: Vocab, graph: Graph) -> None:
-    uri = URIRef(VOCAB[cmdi.id])
+    uri = URIRef(VOCAB[cmdi.identifier])
 
     graph.add((uri, RDF.type, DCAT.Dataset))
-    graph.add((uri, DCTERMS.identifier, Literal(cmdi.id)))
+    graph.add((uri, DCTERMS.identifier, Literal(cmdi.identifier)))
     graph.add((uri, DCTERMS.title, Literal(cmdi.title, lang='en')))
-    graph.add((uri, DCTERMS.conformsTo, URIRef(CONFORMS_TO[cmdi.type])))
+    graph.add((uri, DCTERMS.conformsTo, URIRef(CONFORMS_TO[cmdi.type.syntax])))
 
     for loc in cmdi.locations:
         if loc.type == 'homepage' and loc.recipe is None:
@@ -118,13 +117,14 @@ def create_rdf_in_graph(cmdi: Vocab, graph: Graph) -> None:
         graph.add((uri, DCTERMS.description, Literal(description_text, lang='en')))
         graph.add((uri, DCTERMS.description, Literal(cmdi.description, datatype=XTYPES['Fragment-Markdown'])))
 
-    graph.add((uri, DCTERMS.license, URIRef(cmdi.license.uri)))
+    for license in cmdi.licenses:
+        graph.add((uri, DCTERMS.license, URIRef(license.uri)))
 
     # graph.add((uri, DCTERMS.issued, Literal(cmdi.created, datatype=XSD.date)))
     # graph.add((uri, DCTERMS.modified, Literal(cmdi.modified, datatype=XSD.date)))
 
-    for publisher in cmdi.publishers:
-        graph.add((uri, DCTERMS.publisher, URIRef(PUBLISHER[publisher.uri.lower()])))
+    for registry in cmdi.registries:
+        graph.add((uri, DCTERMS.publisher, URIRef(registry.url)))
 
     for review in cmdi.reviews:
         create_review_rdf_in_graph(cmdi, uri, review, graph)
@@ -163,7 +163,7 @@ def create_review_rdf_in_graph(cmdi: Vocab, uri: URIRef, review: Review, graph: 
 
 
 def create_version_rdf_in_graph(cmdi: Vocab, uri: URIRef, version: Version, graph: Graph) -> None:
-    version_uri = URIRef(VOCAB[f'{cmdi.id}/version/{version.version}'])
+    version_uri = URIRef(VOCAB[f'{cmdi.identifier}/version/{version.version}'])
     graph.add((uri, DCTERMS.hasVersion, version_uri))
 
     graph.add((version_uri, RDF.type, DCAT.Dataset))
@@ -193,7 +193,7 @@ def create_version_rdf_in_graph(cmdi: Vocab, uri: URIRef, version: Version, grap
 
 def create_version_summary_rdf_in_graph(cmdi: Vocab, version_uri: URIRef, version: Version, graph: Graph) -> None:
     summary = version.summary
-    summary_uri = URIRef(VOCAB[f'{cmdi.id}/version/{version.version}/summary'])
+    summary_uri = URIRef(VOCAB[f'{cmdi.identifier}/version/{version.version}/summary'])
     graph.add((summary_uri, RDF.type, VOID.Dataset))
     graph.add((summary_uri, DCTERMS.isPartOf, version_uri))
 
