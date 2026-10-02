@@ -81,6 +81,9 @@ xpath_topic_domain = f"{voc_root}/cmd:Topic/cmd:Domain"
 xpath_topic_tag = f"{voc_root}/cmd:Topic/cmd:Tag"
 xpath_publisher = f"{voc_root}/cmd:Publisher"
 
+xpath_created = f"{voc_root}/cmd:InternalCuration/cmd:Status/cmd:dateFrom"
+xpath_modified = f"./cmd:Header/cmd:MdCreationDate"
+
 
 class Authority(BaseModel):
     uri: Optional[str] = None
@@ -169,6 +172,8 @@ class Version(BaseModel):
 class Vocab(BaseModel):
     identifier: str
     title: str
+    created: datetime
+    modified: datetime
     namespace: Optional[Namespace] = None
     creators: List[Authority] = []
     maintainers: List[Authority] = []
@@ -282,6 +287,8 @@ def get_record(nr: int, id: int) -> Vocab:
         record = Vocab(
             identifier=grab_value(xpath_identification_identifier, root),
             title=grab_value(xpath_identification_title, root),
+            created=grab_value(xpath_created, root),
+            modified=grab_value(xpath_modified, root),
             namespace=Namespace(
                 uri=grab_value(xpath_uri, grab_first(xpath_identification_namespace, root)),
                 prefix=grab_value(xpath_prefix, grab_first(xpath_identification_namespace, root))

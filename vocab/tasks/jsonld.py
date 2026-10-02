@@ -6,17 +6,20 @@ import gzip
 from pyld import jsonld
 from bs4 import BeautifulSoup
 from markdown import markdown
+from urllib.parse import quote
 from importlib.resources import files
-from rdflib import Namespace, Graph, DCAT, DCTERMS, SDO, VOID, RDF, Literal, URIRef, XSD, BNode
+from rdflib import Namespace, Graph, DCAT, DCTERMS, SDO, VOID, FOAF, RDF, Literal, URIRef, XSD, BNode, PROV
 
 from vocab.app import celery
-from vocab.cmdi import get_record, Vocab, Version, Review
+from vocab.cmdi import get_record, Vocab, Version, Review, Authority
 from vocab.config import root_path, jsonld_rel_path, vocab_registry_url
 from vocab.util.rdf import get_sparql_store
 from vocab.util.work import get_files_in_path, run_work_for_file
 
-VOCAB = Namespace(vocab_registry_url + '/vocab/')
+VOCAB = Namespace(vocab_registry_url + '#')
+MOD = Namespace('https://w3id.org/mod#')
 XTYPES = Namespace('http://purl.org/xtypes/')
+VANN = Namespace('http://purl.org/vocab/vann/')
 
 CONTEXT = json.loads(files('vocab.util').joinpath('context.json').read_bytes())
 
@@ -47,6 +50,7 @@ RECIPE = {
     "rdf": "https://www.w3.org/RDF/"
 }
 
+
 @celery.task(name='jsonld', autoretry_for=(Exception,),
              default_retry_delay=60 * 30, retry_kwargs={'max_retries': 5})
 def create_jsonld(nr: int, id: int) -> None:
@@ -65,7 +69,7 @@ def create_jsonld(nr: int, id: int) -> None:
     jsonld_data = json.dumps(jsonld_framed, indent=4)
     jsonld_data = bytes(jsonld_data, 'utf-8')
     # TODO: jsonld_data = gzip.compress(jsonld_data)
-    open(os.path.join(root_path, jsonld_rel_path, record.identifier + '.jsonld'), 'wb').write(jsonld_data) # TODO: .gz
+    open(os.path.join(root_path, jsonld_rel_path, record.identifier + '.jsonld'), 'wb').write(jsonld_data)  # TODO: .gz
 
     # TODO: Also write TTL for now:
     ttl_data = new_graph.serialize(format='ttl')
@@ -88,43 +92,96 @@ def init_graph() -> Graph:
     graph = Graph(bind_namespaces='core')
     graph.bind('vocab', VOCAB)
     graph.bind('dcat', DCAT)
+    graph.bind('mod', MOD)
     graph.bind('dcterms', DCTERMS)
     graph.bind('xtypes', XTYPES)
+    graph.bind('prov', PROV)
     graph.bind('schema', SDO)
     graph.bind('void', VOID)
-    graph.bind('vocab', 'https://registry.vocabs.clariah.nl/vocab/')
+    graph.bind('foaf', FOAF)
+    graph.bind('vann', VANN)
 
     return graph
 
 
 def create_rdf_in_graph(cmdi: Vocab, graph: Graph) -> None:
     uri = URIRef(VOCAB[cmdi.identifier])
+    create_catalog_record_in_graph(cmdi, uri, graph)
 
     graph.add((uri, RDF.type, DCAT.Dataset))
+    graph.add((uri, RDF.type, MOD.SemanticArtifact))
     graph.add((uri, DCTERMS.identifier, Literal(cmdi.identifier)))
-    graph.add((uri, DCTERMS.title, Literal(cmdi.title, lang='en')))
     graph.add((uri, DCTERMS.conformsTo, URIRef(CONFORMS_TO[cmdi.type.syntax])))
+    graph.add((uri, DCTERMS.title, Literal(cmdi.title, lang='en')))
+
+    if cmdi.description is not None:
+        description_html = markdown(cmdi.description)
+        description_soup = BeautifulSoup(description_html, 'html.parser')
+        description_text = ''.join(description_soup.find_all(string=True)).strip()
+
+        graph.add((uri, DCTERMS.description, Literal(description_text, lang='en')))
+        graph.add((uri, DCTERMS.description, Literal(cmdi.description, datatype=XTYPES['Fragment-Markdown'])))
 
     for loc in cmdi.locations:
         if loc.type == 'homepage' and loc.recipe is None:
             graph.add((uri, DCAT.landingPage, URIRef(loc.location)))
 
-    if cmdi.description is not None:
-        description_html = markdown(cmdi.description)
-        description_soup = BeautifulSoup(description_html, 'html.parser')
-        description_text = ''.join(description_soup.findAll(string=True)).strip()
-
-        graph.add((uri, DCTERMS.description, Literal(description_text, lang='en')))
-        graph.add((uri, DCTERMS.description, Literal(cmdi.description, datatype=XTYPES['Fragment-Markdown'])))
-
     for license in cmdi.licenses:
-        graph.add((uri, DCTERMS.license, URIRef(license.uri)))
+        if license.uri:
+            graph.add((uri, DCTERMS.license, URIRef(license.uri)))
 
-    # graph.add((uri, DCTERMS.issued, Literal(cmdi.created, datatype=XSD.date)))
-    # graph.add((uri, DCTERMS.modified, Literal(cmdi.modified, datatype=XSD.date)))
+    for language in cmdi.languages:
+        graph.add((uri, DCTERMS.language, Literal(language)))
+
+    # if cmdi.topic.unesco:
+    #     graph.add((uri, DCAT.theme, URIRef(cmdi.topic.unesco)))
+    # if cmdi.topic.nwo:
+    #     graph.add((uri, DCAT.theme, URIRef(cmdi.topic.nwo)))
+    # if cmdi.type.kos:
+    #     graph.add((uri, DCAT.theme, URIRef(cmdi.type.kos)))
+    # if cmdi.type.entity:
+    #     graph.add((uri, DCTERMS.type, URIRef(cmdi.type.entity)))
+
+    for keyword in cmdi.keywords:
+        if keyword.uri:
+            keyword_node = BNode()
+            graph.add((uri, DCTERMS.subject, keyword_node))
+            graph.add((keyword_node, RDF.type, SDO.DefinedTerm))
+            graph.add((keyword_node, SDO.name, Literal(keyword.label, 'en')))
+            graph.add((keyword_node, SDO.sameAs, URIRef(keyword.uri)))
+        else:
+            graph.add((uri, DCAT.keyword, Literal(keyword.label, 'en')))
+
+    for creator in cmdi.creators:
+        create_authorities_in_graph(cmdi, uri, creator, URIRef('urn:example:isotc211/CI_RoleCode/originator'), graph)
+    for maintainer in cmdi.maintainers:
+        create_authorities_in_graph(cmdi, uri, maintainer, URIRef('urn:example:isotc211/CI_RoleCode/custodian'), graph)
+    for contributor in cmdi.contributors:
+        create_authorities_in_graph(cmdi, uri, contributor, URIRef('urn:example:isotc211/CI_RoleCode/contributor'),
+                                    graph)
+
+    if cmdi.namespace and cmdi.namespace.prefix:
+        graph.add((uri, VANN.preferredNamespaceUri, URIRef(cmdi.namespace.uri)))
+        graph.add((uri, VANN.preferredNamespacePrefix, Literal(cmdi.namespace.prefix)))
 
     for registry in cmdi.registries:
-        graph.add((uri, DCTERMS.publisher, URIRef(registry.url)))
+        registery_url_name = quote(registry.title)
+
+        vocab_in_registry_url = URIRef(VOCAB[cmdi.identifier + '_registry_' + registery_url_name])
+        graph.add((uri, DCTERMS.isReferencedBy, vocab_in_registry_url))
+        graph.add((vocab_in_registry_url, RDF.type, DCAT.Dataset))
+        graph.add((vocab_in_registry_url, RDF.type, MOD.SemanticArtifact))
+        graph.add((vocab_in_registry_url, DCTERMS.title, Literal(cmdi.title, lang='en')))
+        graph.add((vocab_in_registry_url, DCAT.landingPage,
+                   URIRef(registry.landing_page if registry.landing_page else registry.url)))
+
+        registry_catalog_uri = URIRef(VOCAB['registry_' + registery_url_name])
+        graph.add((vocab_in_registry_url, DCAT.inCatalog, registry_catalog_uri))
+        graph.add((registry_catalog_uri, RDF.type, DCAT.Catalog))
+        graph.add((registry_catalog_uri, RDF.type, MOD.SemanticArtefactCatalog))
+        graph.add((registry_catalog_uri, DCTERMS.title, Literal(registry.title, lang='en')))
+        graph.add((registry_catalog_uri, FOAF.homepage, URIRef(registry.url)))
+        graph.add((registry_catalog_uri, DCAT.record, vocab_in_registry_url))
 
     for review in cmdi.reviews:
         create_review_rdf_in_graph(cmdi, uri, review, graph)
@@ -133,62 +190,115 @@ def create_rdf_in_graph(cmdi: Vocab, graph: Graph) -> None:
         create_version_rdf_in_graph(cmdi, uri, version, graph)
 
 
+def create_catalog_record_in_graph(cmdi: Vocab, uri: URIRef, graph: Graph):
+    catalog_record_uri = URIRef(VOCAB[cmdi.identifier + '_record'])
+    graph.add((uri, FOAF.isPrimaryTopicOf, catalog_record_uri))
+    graph.add((catalog_record_uri, RDF.type, DCAT.CatalogRecord))
+    graph.add((catalog_record_uri, RDF.type, MOD.SemanticArtefactCatalogRecord))
+    graph.add((catalog_record_uri, FOAF.primaryTopic, uri))
+    graph.add((catalog_record_uri, DCTERMS.conformsTo, URIRef('https://www.w3.org/TR/vocab-dcat/')))
+    graph.add((catalog_record_uri, DCTERMS.issued, Literal(cmdi.created, datatype=XSD.date)))
+    graph.add((catalog_record_uri, DCTERMS.modified, Literal(cmdi.modified, datatype=XSD.date)))
+
+    catalog_uri = URIRef(VOCAB)
+    graph.add((catalog_record_uri, DCAT.inCatalog, catalog_uri))
+    graph.add((catalog_uri, RDF.type, DCAT.Catalog))
+    graph.add((catalog_uri, RDF.type, MOD.SemanticArtefactCatalog))
+    graph.add((catalog_uri, DCTERMS.title, Literal('Vocabulary registry', lang='en')))
+    graph.add((catalog_uri, FOAF.homepage, URIRef(VOCAB)))
+    graph.add((catalog_uri, DCAT.record, catalog_record_uri))
+
+
+def create_authorities_in_graph(cmdi: Vocab, uri: URIRef, authority: Authority, role: URIRef, graph: Graph):
+    authority_node = BNode()
+    graph.add((uri, PROV.qualifiedAttribution, authority_node))
+    graph.add((authority_node, RDF.type, PROV.Attribution))
+    graph.add((authority_node, DCAT.hadRole, role))
+
+    agent_node = BNode()
+    graph.add((authority_node, PROV.agent, agent_node))
+    graph.add((agent_node, RDF.type, FOAF.Person))
+    graph.add((agent_node, FOAF.name, Literal(authority.label)))
+    if authority.uri:
+        graph.add((agent_node, FOAF.homepage, URIRef(authority.uri)))
+
+
 def create_review_rdf_in_graph(cmdi: Vocab, uri: URIRef, review: Review, graph: Graph) -> None:
-    review_uri = URIRef(VOCAB[f'{cmdi.id}/review/{review.id}'])
+    review_uri = URIRef(VOCAB[f'{cmdi.identifier}_review_{review.id}'])
     graph.add((uri, SDO.review, review_uri))
-
-    review_rating = BNode()
-    like_action = BNode()
-    dislike_action = BNode()
-
     graph.add((review_uri, RDF.type, SDO.Review))
     graph.add((review_uri, SDO.itemReviewed, uri))
-    graph.add((review_uri, SDO.reviewRating, review_rating))
-    graph.add((review_uri, SDO.reviewBody, Literal(review.review)))
-    graph.add((review_uri, SDO.interactionStatistic, like_action))
-    graph.add((review_uri, SDO.interactionStatistic, dislike_action))
+    graph.add((review_uri, SDO.reviewBody, Literal(review.body)))
 
+    review_rating = BNode()
+    graph.add((review_uri, SDO.reviewRating, review_rating))
     graph.add((review_rating, RDF.type, SDO.Rating))
     graph.add((review_rating, SDO.worstRating, Literal(0.5)))
     graph.add((review_rating, SDO.bestRating, Literal(1)))
     graph.add((review_rating, SDO.ratingValue, Literal(review.rating)))
 
+    like_action = BNode()
+    graph.add((review_uri, SDO.interactionStatistic, like_action))
     graph.add((like_action, RDF.type, SDO.InteractionCounter))
     graph.add((like_action, SDO.interactionType, SDO.LikeAction))
     graph.add((like_action, SDO.userInteractionCount, Literal(review.likes)))
 
+    dislike_action = BNode()
+    graph.add((review_uri, SDO.interactionStatistic, dislike_action))
     graph.add((dislike_action, RDF.type, SDO.InteractionCounter))
     graph.add((dislike_action, SDO.interactionType, SDO.DislikeAction))
     graph.add((dislike_action, SDO.userInteractionCount, Literal(review.dislikes)))
 
 
 def create_version_rdf_in_graph(cmdi: Vocab, uri: URIRef, version: Version, graph: Graph) -> None:
-    version_uri = URIRef(VOCAB[f'{cmdi.identifier}/version/{version.version}'])
+    version_uri = URIRef(VOCAB[f'{cmdi.identifier}_{version.version}'])
     graph.add((uri, DCTERMS.hasVersion, version_uri))
 
     graph.add((version_uri, RDF.type, DCAT.Dataset))
+    graph.add((version_uri, RDF.type, MOD.SemanticArtifact))
     graph.add((version_uri, DCTERMS.title, Literal(f'{cmdi.title} {version.version}')))
     graph.add((version_uri, DCAT.version, Literal(version.version)))
-    graph.add((version_uri, DCAT.isVersionOf, URIRef(uri)))
+    graph.add((version_uri, DCAT.isVersionOf, uri))
     graph.add((version_uri, DCTERMS.issued, Literal(version.validFrom, datatype=XSD.date)))
 
+    distribution_url = None
+    cache_url = None
+    endpoint_url = None
     for loc in version.locations:
         if loc.type == 'homepage':
             graph.add((version_uri, DCAT.landingPage, URIRef(loc.location)))
         elif loc.type == 'dump':
-            distribution = BNode()
-            graph.add((version_uri, DCAT.distribution, distribution))
-            graph.add((distribution, RDF.type, DCAT.Distribution))
-            graph.add((distribution, DCAT.downloadURL, URIRef(loc.location)))
+            if loc.recipe == 'cache':
+                cache_url = loc.location
+            else:
+                distribution_url = loc.location
         elif loc.type == 'endpoint':
-            data_service = BNode()
-            graph.add((version_uri, DCAT.accessService, data_service))
-            graph.add((data_service, RDF.type, DCAT.DataService))
-            graph.add((data_service, DCAT.accessURL, URIRef(loc.location)))
-            graph.add((data_service, DCTERMS.conformsTo, URIRef(RECIPE[loc.recipe])))
+            endpoint_url = loc.location
 
-    if version.summary is not None:
-        create_version_summary_rdf_in_graph(cmdi, version_uri, version, graph)
+    if distribution_url:
+        distribution_uri = URIRef(distribution_url)
+        graph.add((version_uri, DCAT.distribution, distribution_uri))
+        graph.add((distribution_uri, RDF.type, DCAT.Distribution))
+        graph.add((distribution_uri, DCTERMS.title, Literal(f'Distribution of {cmdi.title} {version.version}')))
+        graph.add((distribution_uri, DCAT.downloadURL, URIRef(distribution_url)))
+
+        if cache_url:
+            cache_uri = URIRef(cache_url)
+            graph.add((cache_uri, RDF.type, DCAT.Distribution))
+            graph.add((cache_uri, DCTERMS.title, Literal(f'Cached distribution of {cmdi.title} {version.version}')))
+            graph.add((cache_uri, DCAT.downloadURL, URIRef(cache_url)))
+            graph.add((cache_uri, PROV.wasDerivedFrom, distribution_uri))
+
+        if endpoint_url:
+            data_service_uri = URIRef(endpoint_url)
+            graph.add((distribution_uri, DCAT.accessService, data_service_uri))
+            graph.add((data_service_uri, RDF.type, DCAT.DataService))
+            graph.add((data_service_uri, DCTERMS.title, Literal(f'SPARQL endpoint of {cmdi.title} {version.version}')))
+            graph.add((data_service_uri, DCAT.accessURL, URIRef(endpoint_url)))
+            graph.add((data_service_uri, DCTERMS.conformsTo, URIRef(RECIPE['sparql'])))
+
+    # if version.summary is not None:
+    #     create_version_summary_rdf_in_graph(cmdi, version_uri, version, graph)
 
 
 def create_version_summary_rdf_in_graph(cmdi: Vocab, version_uri: URIRef, version: Version, graph: Graph) -> None:
